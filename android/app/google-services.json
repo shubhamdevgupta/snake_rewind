@@ -1,0 +1,198 @@
+{
+  "project_info": {
+    "project_number": "149829529276",
+    "project_id": "autocapture-2f9a7",
+    "storage_bucket": "autocapture-2f9a7.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:149829529276:android:c607bfcdc8f2aa43a7eab9",
+        "android_client_info": {
+          "package_name": "com.ddws.jjm_wqmis"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "149829529276-gfhhd4ciulr0lfhhb3tgj6l0e0fjgcg9.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC_M5nY4aTjyoTy9ERRrbIKrvprmXLFl5s"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "149829529276-gfhhd4ciulr0lfhhb3tgj6l0e0fjgcg9.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "149829529276-c1bjin1s7ibfs519gv1d7cege4bvuis0.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.shubhamandroidev.sos-buddy"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:149829529276:android:cb92a8196a14aca2a7eab9",
+        "android_client_info": {
+          "package_name": "com.shubhamandroidev.snakerewind"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "149829529276-ikk99dbo4suob4bb2e35t9n0a8hlvk8n.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.shubhamandroidev.snakerewind",
+            "certificate_hash": "3c31260d32f74ac0521bf944df7c2e550f84a398"
+          }
+        },
+        {
+          "client_id": "149829529276-gfhhd4ciulr0lfhhb3tgj6l0e0fjgcg9.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC_M5nY4aTjyoTy9ERRrbIKrvprmXLFl5s"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "149829529276-gfhhd4ciulr0lfhhb3tgj6l0e0fjgcg9.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "149829529276-c1bjin1s7ibfs519gv1d7cege4bvuis0.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.shubhamandroidev.sos-buddy"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:149829529276:android:b098c9ab6ce23367a7eab9",
+        "android_client_info": {
+          "package_name": "com.shubhamandroidev.sos_buddy"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "149829529276-gfhhd4ciulr0lfhhb3tgj6l0e0fjgcg9.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC_M5nY4aTjyoTy9ERRrbIKrvprmXLFl5s"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "149829529276-gfhhd4ciulr0lfhhb3tgj6l0e0fjgcg9.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "149829529276-c1bjin1s7ibfs519gv1d7cege4bvuis0.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.shubhamandroidev.sos-buddy"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:149829529276:android:881ad9cd539485cda7eab9",
+        "android_client_info": {
+          "package_name": "com.shubhamandroidev.taxiservice"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "149829529276-gfhhd4ciulr0lfhhb3tgj6l0e0fjgcg9.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC_M5nY4aTjyoTy9ERRrbIKrvprmXLFl5s"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "149829529276-gfhhd4ciulr0lfhhb3tgj6l0e0fjgcg9.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "149829529276-c1bjin1s7ibfs519gv1d7cege4bvuis0.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.shubhamandroidev.sos-buddy"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:149829529276:android:56031b7146f77cc6a7eab9",
+        "android_client_info": {
+          "package_name": "com.shubhamdev.stepcounter"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "149829529276-gfhhd4ciulr0lfhhb3tgj6l0e0fjgcg9.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC_M5nY4aTjyoTy9ERRrbIKrvprmXLFl5s"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "149829529276-gfhhd4ciulr0lfhhb3tgj6l0e0fjgcg9.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "149829529276-c1bjin1s7ibfs519gv1d7cege4bvuis0.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.shubhamandroidev.sos-buddy"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
