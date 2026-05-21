@@ -1,116 +1,191 @@
-# Snake Xenzia — Classic Nokia Snake (Flutter + Flame)
+# 🐍 Snake Rewind
 
-Production-ready retro Snake inspired by Nokia keypad phones. Built with **Flutter**, **Flame** game engine, and clean modular architecture.
+A modern premium remake of the legendary Nokia Snake game built with Flutter.
 
-## Features
+Snake Rewind combines retro nostalgia with modern arcade visuals, AMOLED themes, smooth gameplay, cloud features, leaderboards, achievements, and premium UI polish.
 
-### Gameplay
-- Smooth 60 FPS gameplay (Flame render loop — no per-tick `setState`)
-- Fixed timestep game logic with delta accumulation
-- Input buffering (up to 3 queued turns) — no missed arrow keys
-- Keyboard (arrows + WASD), swipe, and retro D-pad
-- Easy / Medium / Hard difficulty + score multipliers
-- Persistent high score (SharedPreferences)
-- Retro SFX, background music, haptics, mute toggle
-- Game over stats, pause/resume, restart
+---
 
-### Social & cloud (Phase 2)
-- Firebase Auth — **Guest** or **Google** (optional, not forced)
-- Cloud Firestore — profiles, leaderboards, achievements, stats
-- Global / Weekly / Theme / Friends leaderboards
-- Achievement system with progress sync
-- Statistics screen with charts
-- Analytics + Crashlytics
-- Daily challenge infrastructure, friends hub
+# ✨ Features
 
-See [docs/FIREBASE_SETUP.md](docs/FIREBASE_SETUP.md) for console configuration.
+## 🎮 Gameplay
 
-## Architecture
+* Classic Snake gameplay
+* Smooth interpolated movement
+* Multiple difficulty levels
+* Retro keypad controls
+* Optimized performance
+* Lightweight & responsive
 
+## 🎨 Themes
+
+* Nokia Green
+* Dark Retro
+* Neon Arcade
+* AMOLED Black
+* Pixel Retro
+
+## ☁️ Firebase Integration
+
+* Firebase Authentication
+* Google Sign-In
+* Firebase Analytics
+* Firebase Crashlytics
+* Cloud Firestore
+
+## 🏆 Social Features
+
+* Global leaderboard
+* Friends leaderboard
+* Weekly rankings
+* Achievement system
+* Player statistics
+* Cloud profile sync
+
+## 📊 Statistics
+
+* Best score
+* Total games played
+* Foods eaten
+* Favorite theme
+* Play time tracking
+* Longest snake
+
+---
+
+# 🚀 Tech Stack
+
+* Flutter
+* Dart
+* Firebase
+* Firestore
+* Firebase Auth
+* Firebase Analytics
+* Firebase Crashlytics
+* Provider State Management
+
+---
+
+# 🛠️ Installation
+
+## Clone Repository
+
+```bash
+git clone https://github.com/yourusername/snake-rewind.git
 ```
-lib/
-├── main.dart, app_root.dart
-├── core/firebase/          # Init, options
-├── core/theme/             # Themes + ThemeManager
-├── data/
-│   ├── models/             # UserProfile, LeaderboardEntry, etc.
-│   ├── repositories/       # Auth, User, Leaderboard, Achievement
-│   ├── services/           # Analytics, Crashlytics, Auth, Progression
-│   └── achievements/       # Catalog + engine
-├── features/               # Welcome, Profile, Leaderboard, …
-├── game/                   # Existing Flame game (unchanged feel)
-└── shared/widgets/         # RetroScreenShell, menu tiles
+
+## Open Project
+
+```bash
+cd snake-rewind
 ```
 
-### Performance design
-
-| Before | After |
-|--------|--------|
-| `Timer` + `notifyListeners()` every tick | Flame `update()` + `render()` |
-| Full widget tree rebuild ~5–10×/sec | Only `ValueNotifier` for score |
-| Flutter `CustomPaint` in widget tree | Canvas draw on game thread |
-
-## Setup
+## Install Dependencies
 
 ```bash
 flutter pub get
-python tool/generate_sounds.py   # creates assets/audio/*.wav
+```
+
+## Run App
+
+```bash
 flutter run
 ```
 
-## Profile / DevTools
+---
 
-```bash
-flutter run --profile
+# 🔥 Firebase Setup
+
+1. Create Firebase project
+2. Add Android app
+3. Download `google-services.json`
+4. Place it inside:
+
+```text
+android/app/
 ```
 
-Open **DevTools → Performance → Flutter frames**. Target: bars under **17 ms** (60 FPS), minimal orange jank.
+5. Enable:
 
-## Build release (Play Store)
+* Google Authentication
+* Firestore Database
+* Analytics
+* Crashlytics
+
+---
+
+# 📦 Release Build
+
+## APK
 
 ```bash
-# App Bundle (recommended for Play Store)
-flutter build appbundle --release
-
-# APK
 flutter build apk --release
 ```
 
-Output:
-- AAB: `build/app/outputs/bundle/release/app-release.aab`
-- APK: `build/app/outputs/flutter-apk/app-release.apk`
-
-### Signing (release)
-
-1. Place `upload-keystore.jks` in the `android/` folder.
-2. Copy `android/keystore.properties.example` → `android/keystore.properties` and set passwords.
-3. Build:
+## App Bundle
 
 ```bash
-flutter build appbundle --release
+flutter build appbundle
 ```
 
-Output: `build/app/outputs/bundle/release/app-release.aab`
+---
 
-**Never commit** `keystore.properties` or `*.jks` to a public repository.
+# 🧠 Future Roadmap
 
-## Tests
+* Multiplayer mode
+* Daily challenges
+* Seasonal themes
+* Cloud save sync
+* Online tournaments
+* Snake skins
+* Power-ups
+* Event system
 
-```bash
-flutter test
-flutter analyze
-```
+---
 
-## Assets
+# 🎨 Design Philosophy
 
-```
-assets/audio/
-  click.wav
-  eat.wav
-  game_over.wav
-  bg.wav
-```
+Snake Rewind is inspired by:
 
-## License
+* Nokia keypad phone nostalgia
+* Minimal AMOLED aesthetics
+* Retro arcade games
+* Modern premium UI design
 
-MIT — portfolio / learning use.
+The goal was to create:
+
+> “A premium modern social remake of the legendary Snake game.”
+
+---
+
+# 📄 Privacy
+
+Snake Rewind does not collect personal user data without consent.
+
+Firebase services may be used for:
+
+* Analytics
+* Authentication
+* Crash reporting
+
+---
+
+# 👨‍💻 Developer
+
+Developed by Shubham Gupta
+
+---
+
+# ⭐ Support
+
+If you like the project:
+
+* Star the repository
+* Share feedback
+* Contribute improvements
+
+---
+
+# 📜 License
+
+This project is licensed under the MIT License.
