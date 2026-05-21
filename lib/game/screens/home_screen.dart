@@ -131,7 +131,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                          const SizedBox(height: 32),
+                          const SizedBox(height: 16),
                           Text(
                             'BEST ${_highScore.toString().padLeft(4, '0')}',
                             style: TextStyle(

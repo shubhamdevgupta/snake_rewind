@@ -29,6 +29,7 @@ class AuthController extends ChangeNotifier {
   bool _loading = false;
   bool _onboardingComplete = false;
   String? _error;
+  StreamSubscription<UserProfile?>? _profileSub;
 
   User? get firebaseUser => _firebaseUser;
   UserProfile? get profile => _profile;
@@ -38,6 +39,9 @@ class AuthController extends ChangeNotifier {
   String? get error => _error;
   String? get uid => _firebaseUser?.uid;
   bool get isSignedIn => _firebaseUser != null;
+
+  bool get needsUsernameSetup =>
+      isSignedIn && (_profile == null || !_profile!.hasValidUsername);
 
   Future<void> initialize() async {
     _onboardingComplete = await StorageService.loadOnboardingComplete();
@@ -65,6 +69,7 @@ class AuthController extends ChangeNotifier {
       _profile = UserProfile.guest(_firebaseUser!.uid);
       await _userRepo.createOrUpdateProfile(_profile!);
       await _completeOnboarding();
+      _watchProfile();
     } on Object catch (e, st) {
       _error = 'Guest sign-in failed';
       await CrashlyticsService.recordError(e, st, reason: 'guest_auth');
@@ -84,10 +89,10 @@ class AuthController extends ChangeNotifier {
       final cred = await _auth!.signInWithGoogle();
       _firebaseUser = cred.user;
       _mode = AuthMode.google;
-      final display = _firebaseUser?.displayName ?? 'Player';
       _profile = UserProfile(
         uid: _firebaseUser!.uid,
-        username: display,
+        username: '',
+        displayName: _firebaseUser?.displayName ?? 'Player',
         email: _firebaseUser?.email,
         photoUrl: _firebaseUser?.photoURL,
         isGuest: false,
@@ -95,6 +100,7 @@ class AuthController extends ChangeNotifier {
       );
       await _userRepo.createOrUpdateProfile(_profile!);
       await _completeOnboarding();
+      _watchProfile();
     } on Object catch (e, st) {
       _error = 'Google sign-in failed';
       await CrashlyticsService.recordError(e, st, reason: 'google_auth');
@@ -103,7 +109,21 @@ class AuthController extends ChangeNotifier {
     }
   }
 
+  void _watchProfile() {
+    _profileSub?.cancel();
+    final id = uid;
+    if (id == null) return;
+    _profileSub = _userRepo.watchProfile(id).listen((p) {
+      if (p != null) {
+        _profile = p;
+        notifyListeners();
+      }
+    });
+  }
+
   Future<void> signOut() async {
+    await _profileSub?.cancel();
+    _profileSub = null;
     await _auth?.signOut();
     _firebaseUser = null;
     _profile = null;
@@ -113,17 +133,14 @@ class AuthController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> updateUsername(String name) async {
-    if (_profile == null || uid == null) return;
-    final trimmed = name.trim();
-    if (trimmed.isEmpty) return;
-    await _userRepo.updateUsername(uid!, trimmed);
-    updateProfileLocal(_profile!.copyWith(username: trimmed));
+  Future<void> refreshProfile() async {
+    await _loadProfile();
   }
 
   void updateProfileLocal(UserProfile profile) {
     _profile = profile;
     notifyListeners();
+    _watchProfile();
   }
 
   Future<void> _loadProfile() async {
@@ -133,11 +150,13 @@ class AuthController extends ChangeNotifier {
         ? UserProfile.guest(uid!)
         : UserProfile(
             uid: uid!,
-            username: _firebaseUser!.displayName ?? 'Player',
+            username: '',
+            displayName: _firebaseUser!.displayName,
             email: _firebaseUser!.email,
             photoUrl: _firebaseUser!.photoURL,
           );
     notifyListeners();
+    _watchProfile();
   }
 
   Future<void> _completeOnboarding() async {

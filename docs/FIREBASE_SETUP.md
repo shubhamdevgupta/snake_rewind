@@ -31,9 +31,23 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if request.auth != null;
       allow write: if request.auth != null && request.auth.uid == userId;
+      match /friends/{friendId} {
+        allow read: if request.auth != null;
+        allow write: if request.auth != null;
+      }
       match /achievements/{id} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
+    }
+    match /usernames/{name} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow delete: if request.auth != null;
+    }
+    match /friend_requests/{requestId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null;
     }
     match /stats/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
@@ -48,10 +62,22 @@ service cloud.firestore {
 
 ## 5. Firestore indexes
 
-Create composite index if prompted when opening Leaderboard:
+Create composite indexes when prompted in the console (or add to `firestore.indexes.json`):
 
-- Collection: `leaderboards/global/entries`
-- Field: `score` Descending
+| Collection | Fields |
+|------------|--------|
+| `users` | `usernameLower` Asc, `usernameLower` Asc (range) |
+| `friend_requests` | `toUid` Asc, `status` Asc, `createdAt` Desc |
+| `friend_requests` | `fromUid` Asc, `status` Asc, `createdAt` Desc |
+| `users/{uid}/friends` | `bestScore` Desc |
+| `leaderboards/global/entries` | `score` Desc |
+
+Username prefix search uses:
+
+```
+where('usernameLower', '>=', prefix)
+where('usernameLower', '<', prefix + '\uf8ff')
+```
 
 ## 6. iOS (optional)
 
