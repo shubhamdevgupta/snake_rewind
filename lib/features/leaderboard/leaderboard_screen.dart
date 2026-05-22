@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/theme_manager.dart';
 import '../../data/models/leaderboard_entry.dart';
+import '../../data/controllers/social_controller.dart';
 import '../../data/repositories/leaderboard_repository.dart';
 import '../../data/services/analytics_service.dart';
 import '../../data/services/auth_controller.dart';
+import '../../data/utils/username_validator.dart';
 import '../../shared/widgets/retro_screen_shell.dart';
 
 class LeaderboardScreen extends StatefulWidget {
@@ -88,12 +90,15 @@ class _BoardList extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = ThemeManager.instance.theme;
     final repo = LeaderboardRepository();
-    final friends = AuthController.instance.profile?.friendIds ?? [];
+    final profile = AuthController.instance.profile;
+
+    final stream = type == LeaderboardType.friends
+        ? SocialController.instance.friendsRepo
+            .watchFriendLeaderboard(profile)
+        : repo.watchTop(type: type, themeId: themeId);
 
     return StreamBuilder<List<LeaderboardEntry>>(
-      stream: type == LeaderboardType.friends && friends.isEmpty
-          ? Stream.value(<LeaderboardEntry>[])
-          : repo.watchTop(type: type, themeId: themeId),
+      stream: stream,
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
           return Center(child: CircularProgressIndicator(color: theme.uiPrimary));
@@ -103,7 +108,7 @@ class _BoardList extends StatelessWidget {
           return Center(
             child: Text(
               type == LeaderboardType.friends
-                  ? 'Add friends to compete'
+                  ? 'Add friends to compete together.'
                   : 'No scores yet — be first!',
               style: TextStyle(color: theme.uiPrimary.withValues(alpha: 0.6)),
             ),
@@ -136,8 +141,8 @@ class _EntryTile extends StatelessWidget {
     final rank = entry.rank;
     final glow = rank == 1;
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
+    return RepaintBoundary(
+      child: Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
@@ -146,14 +151,6 @@ class _EntryTile extends StatelessWidget {
           color: isMe ? theme.uiAccent : theme.boardBorder,
           width: isMe ? 2 : 1,
         ),
-        boxShadow: glow
-            ? [
-                BoxShadow(
-                  color: theme.uiAccent.withValues(alpha: 0.35),
-                  blurRadius: 8,
-                ),
-              ]
-            : null,
       ),
       child: Row(
         children: [
@@ -174,16 +171,18 @@ class _EntryTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  entry.username,
+                  entry.username.startsWith('@')
+                      ? entry.username
+                      : UsernameValidator.display(entry.username),
                   style: TextStyle(
-                    color: theme.uiPrimary,
+                    color: theme.textOnSurface,
                     fontWeight: FontWeight.bold,
                     fontSize: 13,
                   ),
                 ),
                 Text(
                   entry.favoriteTheme.toUpperCase(),
-                  style: TextStyle(color: theme.scoreLabel, fontSize: 9),
+                  style: TextStyle(color: theme.textMuted, fontSize: 9),
                 ),
               ],
             ),
@@ -195,13 +194,11 @@ class _EntryTile extends StatelessWidget {
               fontSize: 18,
               fontWeight: FontWeight.bold,
               fontFamily: 'monospace',
-              shadows: glow
-                  ? [Shadow(color: theme.uiAccent.withValues(alpha: 0.6), blurRadius: 6)]
-                  : null,
             ),
           ),
         ],
       ),
+    ),
     );
   }
 

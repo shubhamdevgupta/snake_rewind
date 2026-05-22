@@ -5,6 +5,7 @@ import '../../core/theme/theme_manager.dart';
 import '../../game/controllers/game_controller.dart';
 import '../achievements/achievement_engine.dart';
 import '../models/leaderboard_entry.dart';
+import '../repositories/friend_repository.dart';
 import '../repositories/leaderboard_repository.dart';
 import '../repositories/user_repository.dart';
 import '../services/analytics_service.dart';
@@ -18,6 +19,7 @@ class ProgressionService {
 
   final UserRepository _users = UserRepository();
   final LeaderboardRepository _leaderboard = LeaderboardRepository();
+  final FriendRepository _friends = FriendRepository();
   final AchievementEngine _achievements = AchievementEngine();
 
   DateTime? _sessionStart;
@@ -101,6 +103,16 @@ class ProgressionService {
         );
         await _users.createOrUpdateProfile(updated);
         AuthController.instance.updateProfileLocal(updated);
+
+        if (updated.bestScore > profile.bestScore && updated.hasValidUsername) {
+          await _friends.syncScoreToFriends(
+            uid: uid,
+            bestScore: updated.bestScore,
+            favoriteTheme: themeId,
+            username: updated.username,
+            photoUrl: updated.photoUrl,
+          );
+        }
       }
 
       if (info.score > 0) {

@@ -1,10 +1,20 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/theme_manager.dart';
-import '../../data/repositories/user_repository.dart';
+import '../../data/controllers/social_controller.dart';
+import '../../data/models/friend_profile.dart';
+import '../../data/repositories/friend_repository.dart';
+import '../../data/models/friend_request.dart';
+import '../../data/models/public_user.dart';
 import '../../data/services/analytics_service.dart';
 import '../../data/services/auth_controller.dart';
+import '../../data/utils/username_validator.dart';
+import '../../shared/navigation/retro_navigation.dart';
+import '../../shared/widgets/retro_avatar.dart';
 import '../../shared/widgets/retro_screen_shell.dart';
+import '../../shared/widgets/social_snackbar.dart';
+import '../../shared/widgets/user_search_card.dart';
+import 'friend_requests_screen.dart';
 
 class FriendsScreen extends StatefulWidget {
   const FriendsScreen({super.key});
@@ -14,108 +24,242 @@ class FriendsScreen extends StatefulWidget {
 }
 
 class _FriendsScreenState extends State<FriendsScreen> {
-  final _uidField = TextEditingController();
-  String? _message;
+  final _search = TextEditingController();
+  final _friendRepo = FriendRepository();
+  Stream<List<FriendProfile>>? _friendsStream;
+  String? _busyUid;
 
   @override
   void initState() {
     super.initState();
     AnalyticsService.logScreen('friends');
+    SocialController.instance.addListener(_rebuild);
+    final uid = AuthController.instance.uid;
+    if (uid != null) _friendsStream = _friendRepo.watchFriends(uid);
+  }
+
+  void _rebuild() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
-    _uidField.dispose();
+    SocialController.instance.removeListener(_rebuild);
+    _search.dispose();
     super.dispose();
   }
 
-  Future<void> _addFriend() async {
-    final myUid = AuthController.instance.uid;
-    final friendUid = _uidField.text.trim();
-    if (myUid == null || friendUid.isEmpty) return;
-    if (friendUid == myUid) {
-      setState(() => _message = 'Cannot add yourself');
-      return;
+  Future<void> _onCardAction(PublicUser user) async {
+    final auth = AuthController.instance;
+    final me = auth.profile;
+    final uid = auth.uid;
+    if (me == null || uid == null) return;
+
+    setState(() => _busyUid = user.uid);
+    try {
+      if (user.relation == SocialRelation.pendingReceived &&
+          user.pendingRequestId != null) {
+        final req = FriendRequest(
+          id: user.pendingRequestId!,
+          fromUid: user.uid,
+          fromUsername: user.username,
+          toUid: uid,
+          fromPhotoUrl: user.photoUrl,
+        );
+        final ok = await SocialController.instance.acceptRequest(req, me);
+        if (!mounted) return;
+        showRetroSnack(
+          context,
+          ok ? 'Friend added!' : 'Could not accept',
+        );
+        if (ok) {
+          auth.updateProfileLocal(
+            me.copyWith(friendsCount: me.friendsCount + 1),
+          );
+        }
+      } else if (user.relation == SocialRelation.none) {
+        final id = await SocialController.instance.sendFriendRequest(me, user);
+        if (!mounted) return;
+        showRetroSnack(
+          context,
+          id != null ? 'Request sent' : 'Could not send request',
+        );
+      }
+      await SocialController.instance.searchUsers(
+        _search.text,
+        myUid: uid,
+      );
+    } finally {
+      if (mounted) setState(() => _busyUid = null);
     }
-    await UserRepository().addFriend(myUid, friendUid);
-    setState(() => _message = 'Friend added — compare on leaderboard');
-    _uidField.clear();
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = ThemeManager.instance.theme;
-    final friends = AuthController.instance.profile?.friendIds ?? [];
+    final uid = AuthController.instance.uid;
+    final social = SocialController.instance;
 
     return RetroScreenShell(
-      title: 'FRIENDS',
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'SOCIAL HUB',
-              style: TextStyle(color: theme.uiAccent, fontWeight: FontWeight.bold, letterSpacing: 2),
+      title: 'SEARCH FRIENDS',
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _search,
+                    style: TextStyle(color: theme.uiPrimary, fontFamily: 'monospace'),
+                    decoration: InputDecoration(
+                      hintText: 'Search @username',
+                      hintStyle: TextStyle(color: theme.scoreLabel),
+                      prefixIcon: Icon(Icons.search, color: theme.uiAccent, size: 20),
+                      border: OutlineInputBorder(
+                        borderSide: BorderSide(color: theme.boardBorder),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderSide: BorderSide(color: theme.boardBorder),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderSide: BorderSide(color: theme.uiAccent, width: 2),
+                      ),
+                    ),
+                    onChanged: (v) {
+                      social.debouncedSearch(v, myUid: uid);
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: Icon(Icons.mail_outline, color: theme.uiAccent),
+                  onPressed: () =>
+                      pushRetroScreen(context, const FriendRequestsScreen()),
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Add players by Firebase UID. Friends appear on the Friends leaderboard tab.',
-              style: TextStyle(color: theme.uiPrimary.withValues(alpha: 0.6), fontSize: 11),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _uidField,
-              style: TextStyle(color: theme.uiPrimary, fontFamily: 'monospace', fontSize: 12),
-              decoration: InputDecoration(
-                hintText: 'Friend UID',
-                hintStyle: TextStyle(color: theme.scoreLabel),
-                border: OutlineInputBorder(borderSide: BorderSide(color: theme.boardBorder)),
+          ),
+          if (social.isSearching)
+            Padding(
+              padding: const EdgeInsets.all(8),
+              child: LinearProgressIndicator(
+                color: theme.uiAccent,
+                backgroundColor: theme.boardBorder,
+                minHeight: 2,
               ),
             ),
-            const SizedBox(height: 10),
-            Material(
-              color: theme.uiSecondary,
-              child: InkWell(
-                onTap: _addFriend,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(border: Border.all(color: theme.boardBorder, width: 2)),
-                  child: Text('ADD FRIEND', style: TextStyle(color: theme.uiPrimary, fontWeight: FontWeight.bold)),
+          Expanded(
+            child: _search.text.trim().length < 2
+                ? _friendsList(theme, uid)
+                : _searchResults(theme, social),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _searchResults(dynamic theme, SocialController social) {
+    if (social.searchResults.isEmpty) {
+      return Center(
+        child: Text(
+          'No players found.',
+          style: TextStyle(color: theme.uiPrimary.withValues(alpha: 0.5)),
+        ),
+      );
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: social.searchResults.length,
+      itemBuilder: (_, i) {
+        final u = social.searchResults[i];
+        return UserSearchCard(
+          user: u,
+          theme: theme,
+          busy: _busyUid == u.uid,
+          onAction: () => _onCardAction(u),
+        );
+      },
+    );
+  }
+
+  Widget _friendsList(dynamic theme, String? uid) {
+    if (uid == null) {
+      return Center(
+        child: Text(
+          'Sign in to add friends',
+          style: TextStyle(color: theme.uiPrimary.withValues(alpha: 0.5)),
+        ),
+      );
+    }
+    final stream = _friendsStream ?? _friendRepo.watchFriends(uid);
+    return StreamBuilder<List<FriendProfile>>(
+      stream: stream,
+      builder: (context, snap) {
+        final friends = snap.data ?? [];
+        if (friends.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                'Add friends to compete together.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: theme.uiPrimary.withValues(alpha: 0.5),
+                  fontSize: 13,
                 ),
               ),
             ),
-            if (_message != null) ...[
-              const SizedBox(height: 12),
-              Text(_message!, style: TextStyle(color: theme.uiAccent, fontSize: 12)),
-            ],
-            const SizedBox(height: 24),
-            Text('YOUR FRIENDS (${friends.length})',
-                style: TextStyle(color: theme.scoreLabel, fontSize: 10, letterSpacing: 2)),
-            const SizedBox(height: 8),
-            Expanded(
-              child: friends.isEmpty
-                  ? Center(child: Text('No friends yet', style: TextStyle(color: theme.uiPrimary.withValues(alpha: 0.5))))
-                  : ListView.builder(
-                      itemCount: friends.length,
-                      itemBuilder: (_, i) => Container(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: theme.boardBorder),
-                          color: theme.scoreBackground.withValues(alpha: 0.2),
+          );
+        }
+        return ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: friends.length,
+          itemBuilder: (_, i) {
+            final f = friends[i];
+            return Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                border: Border.all(color: theme.boardBorder),
+                color: theme.scoreBackground.withValues(alpha: 0.2),
+              ),
+              child: Row(
+                children: [
+                  RetroAvatar(photoUrl: f.photoUrl, radius: 20, theme: theme),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          UsernameValidator.display(f.username),
+                          style: TextStyle(
+                            color: theme.uiPrimary,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                        child: Text(
-                          friends[i],
-                          style: TextStyle(color: theme.uiPrimary, fontFamily: 'monospace', fontSize: 11),
+                        Text(
+                          'BEST ${f.bestScore.toString().padLeft(4, '0')}',
+                          style: TextStyle(
+                            color: theme.scoreLabel,
+                            fontSize: 10,
+                            fontFamily: 'monospace',
+                          ),
                         ),
-                      ),
+                      ],
                     ),
-            ),
-          ],
-        ),
-      ),
+                  ),
+                  Text(
+                    'FRIENDS',
+                    style: TextStyle(color: theme.uiAccent, fontSize: 9),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

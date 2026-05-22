@@ -99,9 +99,8 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                       children: [
                         RetroButton(
                           theme: theme,
-                          label: 'GOOGLE',
+                          label: 'Sign In With Google',
                           flex: 2,
-                          icon: Icons.g_mobiledata,
                           onPressed: () => auth.signInWithGoogle(),
                         ),
                       ],

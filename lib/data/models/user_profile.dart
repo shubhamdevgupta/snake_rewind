@@ -1,9 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../utils/username_validator.dart';
+
 class UserProfile {
   const UserProfile({
     required this.uid,
     required this.username,
+    this.displayName,
     this.email,
     this.photoUrl,
     this.bestScore = 0,
@@ -15,6 +18,7 @@ class UserProfile {
     this.totalPlayTimeSeconds = 0,
     this.country,
     this.isGuest = false,
+    this.friendsCount = 0,
     this.friendIds = const [],
     this.createdAt,
     this.lastSyncAt,
@@ -22,6 +26,7 @@ class UserProfile {
 
   final String uid;
   final String username;
+  final String? displayName;
   final String? email;
   final String? photoUrl;
   final int bestScore;
@@ -33,9 +38,17 @@ class UserProfile {
   final int totalPlayTimeSeconds;
   final String? country;
   final bool isGuest;
+  final int friendsCount;
   final List<String> friendIds;
   final DateTime? createdAt;
   final DateTime? lastSyncAt;
+
+  bool get hasValidUsername =>
+      username.isNotEmpty &&
+      UsernameValidator.isValidFormat(username) &&
+      !UsernameValidator.isPlaceholder(username, uid);
+
+  String get atUsername => UsernameValidator.display(username);
 
   int get rankTier => switch (bestScore) {
         >= 1000 => 5,
@@ -55,7 +68,8 @@ class UserProfile {
 
   factory UserProfile.guest(String uid) => UserProfile(
         uid: uid,
-        username: 'Guest_${uid.substring(0, 6)}',
+        username: '',
+        displayName: 'Guest',
         isGuest: true,
         createdAt: DateTime.now(),
       );
@@ -64,7 +78,8 @@ class UserProfile {
     final d = doc.data() ?? {};
     return UserProfile(
       uid: doc.id,
-      username: d['username'] as String? ?? 'Player',
+      username: d['username'] as String? ?? '',
+      displayName: d['displayName'] as String?,
       email: d['email'] as String?,
       photoUrl: d['photoUrl'] as String?,
       bestScore: (d['bestScore'] as num?)?.toInt() ?? 0,
@@ -76,14 +91,17 @@ class UserProfile {
       totalPlayTimeSeconds: (d['totalPlayTimeSeconds'] as num?)?.toInt() ?? 0,
       country: d['country'] as String?,
       isGuest: d['isGuest'] as bool? ?? false,
+      friendsCount: (d['friendsCount'] as num?)?.toInt() ?? 0,
       friendIds: List<String>.from(d['friendIds'] as List? ?? []),
       createdAt: (d['createdAt'] as Timestamp?)?.toDate(),
       lastSyncAt: (d['lastSyncAt'] as Timestamp?)?.toDate(),
     );
   }
 
-  Map<String, dynamic> toFirestore() => {
+  Map<String, dynamic> toCacheJson() => {
+        'uid': uid,
         'username': username,
+        if (displayName != null) 'displayName': displayName,
         if (email != null) 'email': email,
         if (photoUrl != null) 'photoUrl': photoUrl,
         'bestScore': bestScore,
@@ -95,6 +113,52 @@ class UserProfile {
         'totalPlayTimeSeconds': totalPlayTimeSeconds,
         if (country != null) 'country': country,
         'isGuest': isGuest,
+        'friendsCount': friendsCount,
+        if (createdAt != null) 'createdAt': createdAt!.toIso8601String(),
+        if (lastSyncAt != null) 'lastSyncAt': lastSyncAt!.toIso8601String(),
+      };
+
+  factory UserProfile.fromCacheJson(Map<String, dynamic> d) => UserProfile(
+        uid: d['uid'] as String,
+        username: d['username'] as String? ?? '',
+        displayName: d['displayName'] as String?,
+        email: d['email'] as String?,
+        photoUrl: d['photoUrl'] as String?,
+        bestScore: (d['bestScore'] as num?)?.toInt() ?? 0,
+        totalGames: (d['totalGames'] as num?)?.toInt() ?? 0,
+        foodsEaten: (d['foodsEaten'] as num?)?.toInt() ?? 0,
+        favoriteTheme: d['favoriteTheme'] as String? ?? 'classic',
+        favoriteDifficulty: d['favoriteDifficulty'] as String? ?? 'medium',
+        achievementsUnlocked: (d['achievementsUnlocked'] as num?)?.toInt() ?? 0,
+        totalPlayTimeSeconds: (d['totalPlayTimeSeconds'] as num?)?.toInt() ?? 0,
+        country: d['country'] as String?,
+        isGuest: d['isGuest'] as bool? ?? false,
+        friendsCount: (d['friendsCount'] as num?)?.toInt() ?? 0,
+        createdAt: d['createdAt'] != null
+            ? DateTime.tryParse(d['createdAt'] as String)
+            : null,
+        lastSyncAt: d['lastSyncAt'] != null
+            ? DateTime.tryParse(d['lastSyncAt'] as String)
+            : null,
+      );
+
+  Map<String, dynamic> toFirestore() => {
+        'uid': uid,
+        if (username.isNotEmpty) 'username': username,
+        if (username.isNotEmpty) 'usernameLower': username.toLowerCase(),
+        if (displayName != null) 'displayName': displayName,
+        if (email != null) 'email': email,
+        if (photoUrl != null) 'photoUrl': photoUrl,
+        'bestScore': bestScore,
+        'totalGames': totalGames,
+        'foodsEaten': foodsEaten,
+        'favoriteTheme': favoriteTheme,
+        'favoriteDifficulty': favoriteDifficulty,
+        'achievementsUnlocked': achievementsUnlocked,
+        'totalPlayTimeSeconds': totalPlayTimeSeconds,
+        if (country != null) 'country': country,
+        'isGuest': isGuest,
+        'friendsCount': friendsCount,
         'friendIds': friendIds,
         'createdAt': createdAt != null
             ? Timestamp.fromDate(createdAt!)
@@ -104,6 +168,7 @@ class UserProfile {
 
   UserProfile copyWith({
     String? username,
+    String? displayName,
     String? email,
     String? photoUrl,
     int? bestScore,
@@ -114,12 +179,14 @@ class UserProfile {
     int? achievementsUnlocked,
     int? totalPlayTimeSeconds,
     String? country,
+    int? friendsCount,
     List<String>? friendIds,
     DateTime? lastSyncAt,
   }) {
     return UserProfile(
       uid: uid,
       username: username ?? this.username,
+      displayName: displayName ?? this.displayName,
       email: email ?? this.email,
       photoUrl: photoUrl ?? this.photoUrl,
       bestScore: bestScore ?? this.bestScore,
@@ -133,6 +200,7 @@ class UserProfile {
           totalPlayTimeSeconds ?? this.totalPlayTimeSeconds,
       country: country ?? this.country,
       isGuest: isGuest,
+      friendsCount: friendsCount ?? this.friendsCount,
       friendIds: friendIds ?? this.friendIds,
       createdAt: createdAt,
       lastSyncAt: lastSyncAt ?? this.lastSyncAt,

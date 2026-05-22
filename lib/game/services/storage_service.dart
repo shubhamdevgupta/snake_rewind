@@ -9,6 +9,7 @@ abstract final class StorageService {
   static const String keyMuted = 'muted';
   static const String keySettings = 'game_settings_v2';
   static const String keyOnboardingComplete = 'onboarding_complete';
+  static const String keyCachedProfilePrefix = 'cached_profile_';
 
   static SharedPreferences? _prefs;
 
@@ -69,6 +70,29 @@ abstract final class StorageService {
   static Future<void> saveOnboardingComplete(bool value) async {
     await _ensureInit();
     await _prefs!.setBool(keyOnboardingComplete, value);
+  }
+
+  static String _profileCacheKey(String uid) => '$keyCachedProfilePrefix$uid';
+
+  static Future<void> cacheProfileJson(String uid, Map<String, dynamic> json) async {
+    await _ensureInit();
+    await _prefs!.setString(_profileCacheKey(uid), jsonEncode(json));
+  }
+
+  static Future<Map<String, dynamic>?> loadCachedProfileJson(String uid) async {
+    await _ensureInit();
+    final raw = _prefs!.getString(_profileCacheKey(uid));
+    if (raw == null) return null;
+    try {
+      return jsonDecode(raw) as Map<String, dynamic>;
+    } on Object {
+      return null;
+    }
+  }
+
+  static Future<void> clearCachedProfile(String uid) async {
+    await _ensureInit();
+    await _prefs!.remove(_profileCacheKey(uid));
   }
 
   static Future<void> _ensureInit() async {
