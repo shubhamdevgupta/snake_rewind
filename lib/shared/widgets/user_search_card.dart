@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/game_theme_data.dart';
 import '../../data/models/public_user.dart';
+import 'retro_avatar.dart';
 class UserSearchCard extends StatelessWidget {
   const UserSearchCard({
     super.key,
@@ -21,8 +22,8 @@ class UserSearchCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final glow = rank != null && rank! <= 3;
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 220),
+    return RepaintBoundary(
+      child: Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
@@ -31,14 +32,6 @@ class UserSearchCard extends StatelessWidget {
           color: glow ? theme.uiAccent : theme.boardBorder,
           width: glow ? 2 : 1,
         ),
-        boxShadow: glow
-            ? [
-                BoxShadow(
-                  color: theme.uiAccent.withValues(alpha: 0.3),
-                  blurRadius: 8,
-                ),
-              ]
-            : null,
       ),
       child: Row(
         children: [
@@ -56,15 +49,7 @@ class UserSearchCard extends StatelessWidget {
             ),
             const SizedBox(width: 6),
           ],
-          CircleAvatar(
-            radius: 20,
-            backgroundColor: theme.uiSecondary,
-            backgroundImage:
-                user.photoUrl != null ? NetworkImage(user.photoUrl!) : null,
-            child: user.photoUrl == null
-                ? Icon(Icons.person, size: 20, color: theme.uiPrimary)
-                : null,
-          ),
+          RetroAvatar(photoUrl: user.photoUrl, radius: 20, theme: theme),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -73,7 +58,7 @@ class UserSearchCard extends StatelessWidget {
                 Text(
                   user.displayName,
                   style: TextStyle(
-                    color: theme.uiPrimary,
+                    color: theme.textOnSurface,
                     fontWeight: FontWeight.bold,
                     fontSize: 13,
                   ),
@@ -81,7 +66,7 @@ class UserSearchCard extends StatelessWidget {
                 Text(
                   'BEST ${user.bestScore.toString().padLeft(4, '0')}',
                   style: TextStyle(
-                    color: theme.scoreLabel,
+                    color: theme.textMuted,
                     fontSize: 10,
                     fontFamily: 'monospace',
                   ),
@@ -92,6 +77,7 @@ class UserSearchCard extends StatelessWidget {
           _actionButton(context),
         ],
       ),
+    ),
     );
   }
 

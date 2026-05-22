@@ -3,11 +3,14 @@ import 'package:flutter/material.dart';
 import '../../core/theme/theme_manager.dart';
 import '../../data/controllers/social_controller.dart';
 import '../../data/models/friend_profile.dart';
+import '../../data/repositories/friend_repository.dart';
 import '../../data/models/friend_request.dart';
 import '../../data/models/public_user.dart';
 import '../../data/services/analytics_service.dart';
 import '../../data/services/auth_controller.dart';
 import '../../data/utils/username_validator.dart';
+import '../../shared/navigation/retro_navigation.dart';
+import '../../shared/widgets/retro_avatar.dart';
 import '../../shared/widgets/retro_screen_shell.dart';
 import '../../shared/widgets/social_snackbar.dart';
 import '../../shared/widgets/user_search_card.dart';
@@ -22,6 +25,8 @@ class FriendsScreen extends StatefulWidget {
 
 class _FriendsScreenState extends State<FriendsScreen> {
   final _search = TextEditingController();
+  final _friendRepo = FriendRepository();
+  Stream<List<FriendProfile>>? _friendsStream;
   String? _busyUid;
 
   @override
@@ -29,6 +34,8 @@ class _FriendsScreenState extends State<FriendsScreen> {
     super.initState();
     AnalyticsService.logScreen('friends');
     SocialController.instance.addListener(_rebuild);
+    final uid = AuthController.instance.uid;
+    if (uid != null) _friendsStream = _friendRepo.watchFriends(uid);
   }
 
   void _rebuild() {
@@ -127,11 +134,8 @@ class _FriendsScreenState extends State<FriendsScreen> {
                 const SizedBox(width: 8),
                 IconButton(
                   icon: Icon(Icons.mail_outline, color: theme.uiAccent),
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const FriendRequestsScreen(),
-                    ),
-                  ),
+                  onPressed: () =>
+                      pushRetroScreen(context, const FriendRequestsScreen()),
                 ),
               ],
             ),
@@ -188,8 +192,9 @@ class _FriendsScreenState extends State<FriendsScreen> {
         ),
       );
     }
+    final stream = _friendsStream ?? _friendRepo.watchFriends(uid);
     return StreamBuilder<List<FriendProfile>>(
-      stream: SocialController.instance.friendsRepo.watchFriends(uid),
+      stream: stream,
       builder: (context, snap) {
         final friends = snap.data ?? [];
         if (friends.isEmpty) {
@@ -221,15 +226,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
               ),
               child: Row(
                 children: [
-                  CircleAvatar(
-                    radius: 20,
-                    backgroundColor: theme.uiSecondary,
-                    backgroundImage:
-                        f.photoUrl != null ? NetworkImage(f.photoUrl!) : null,
-                    child: f.photoUrl == null
-                        ? Icon(Icons.person, color: theme.uiPrimary, size: 20)
-                        : null,
-                  ),
+                  RetroAvatar(photoUrl: f.photoUrl, radius: 20, theme: theme),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(

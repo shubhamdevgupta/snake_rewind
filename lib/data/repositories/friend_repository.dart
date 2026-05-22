@@ -11,6 +11,16 @@ import '../models/user_profile.dart';
 class FriendRepository {
   FriendRepository({FirebaseFirestore? firestore}) : _db = firestore;
 
+  static final Map<String, Stream<List<FriendRequest>>> _incomingStreams = {};
+  static final Map<String, Stream<List<FriendRequest>>> _sentStreams = {};
+  static final Map<String, Stream<List<FriendProfile>>> _friendsStreams = {};
+
+  static void clearStreamCache() {
+    _incomingStreams.clear();
+    _sentStreams.clear();
+    _friendsStreams.clear();
+  }
+
   final FirebaseFirestore? _db;
 
   FirebaseFirestore? get _firestore {
@@ -31,37 +41,57 @@ class FriendRepository {
   static String requestId(String fromUid, String toUid) => '${fromUid}_$toUid';
 
   Stream<List<FriendProfile>> watchFriends(String uid) {
-    final col = _friends(uid);
-    if (col == null) return Stream.value([]);
-    return col
-        .orderBy('bestScore', descending: true)
-        .limit(50)
-        .snapshots()
-        .map((s) => s.docs.map(FriendProfile.fromFirestore).toList());
+    return _friendsStreams.putIfAbsent(uid, () {
+      final col = _friends(uid);
+      if (col == null) return Stream.value([]);
+      return col.limit(50).snapshots().map((s) {
+        final list = s.docs.map(FriendProfile.fromFirestore).toList();
+        list.sort((a, b) => b.bestScore.compareTo(a.bestScore));
+        return list;
+      });
+    });
   }
 
   Stream<List<FriendRequest>> watchIncoming(String uid) {
-    final col = _requests;
-    if (col == null) return Stream.value([]);
-    return col
-        .where('toUid', isEqualTo: uid)
-        .where('status', isEqualTo: 'pending')
-        .orderBy('createdAt', descending: true)
-        .limit(30)
-        .snapshots()
-        .map((s) => s.docs.map(FriendRequest.fromFirestore).toList());
+    return _incomingStreams.putIfAbsent(uid, () {
+      final col = _requests;
+      if (col == null) return Stream.value([]);
+      return col
+          .where('toUid', isEqualTo: uid)
+          .where('status', isEqualTo: 'pending')
+          .limit(30)
+          .snapshots()
+          .map((s) {
+            final list = s.docs.map(FriendRequest.fromFirestore).toList();
+            list.sort((a, b) {
+              final at = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+              final bt = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+              return bt.compareTo(at);
+            });
+            return list;
+          });
+    });
   }
 
   Stream<List<FriendRequest>> watchSent(String uid) {
-    final col = _requests;
-    if (col == null) return Stream.value([]);
-    return col
-        .where('fromUid', isEqualTo: uid)
-        .where('status', isEqualTo: 'pending')
-        .orderBy('createdAt', descending: true)
-        .limit(30)
-        .snapshots()
-        .map((s) => s.docs.map(FriendRequest.fromFirestore).toList());
+    return _sentStreams.putIfAbsent(uid, () {
+      final col = _requests;
+      if (col == null) return Stream.value([]);
+      return col
+          .where('fromUid', isEqualTo: uid)
+          .where('status', isEqualTo: 'pending')
+          .limit(30)
+          .snapshots()
+          .map((s) {
+            final list = s.docs.map(FriendRequest.fromFirestore).toList();
+            list.sort((a, b) {
+              final at = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+              final bt = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+              return bt.compareTo(at);
+            });
+            return list;
+          });
+    });
   }
 
   Stream<int> watchIncomingCount(String uid) {

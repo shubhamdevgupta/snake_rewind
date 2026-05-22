@@ -25,11 +25,12 @@ class RetroScreenShell extends StatelessWidget {
       backgroundColor: theme.scaffold,
       appBar: AppBar(
         backgroundColor: theme.scaffold,
-        foregroundColor: theme.uiPrimary,
+        foregroundColor: theme.textOnBackground,
         elevation: 0,
         title: Text(
           title,
-          style: const TextStyle(
+          style: TextStyle(
+            color: theme.textHighContrast,
             letterSpacing: 3,
             fontWeight: FontWeight.bold,
             fontSize: 16,
@@ -40,7 +41,9 @@ class RetroScreenShell extends StatelessWidget {
       body: Column(
         children: [
           if (!settings.retroStatusBar) RetroStatusBar(theme: theme),
-          Expanded(child: child),
+          Expanded(
+            child: RepaintBoundary(child: child),
+          ),
         ],
       ),
     );
@@ -82,14 +85,17 @@ class RetroMenuTile extends StatelessWidget {
                   child: Text(
                     label,
                     style: TextStyle(
-                      color: theme.uiPrimary,
+                      color: theme.textOnSurface,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 2,
                       fontSize: 13,
                     ),
                   ),
                 ),
-                Icon(Icons.chevron_right, color: theme.uiPrimary.withValues(alpha: 0.5)),
+                Icon(
+                  Icons.chevron_right,
+                  color: theme.textMuted.withValues(alpha: 0.8),
+                ),
               ],
             ),
           ),

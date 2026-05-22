@@ -98,9 +98,53 @@ class UserProfile {
     );
   }
 
-  Map<String, dynamic> toFirestore() => {
+  Map<String, dynamic> toCacheJson() => {
         'uid': uid,
         'username': username,
+        if (displayName != null) 'displayName': displayName,
+        if (email != null) 'email': email,
+        if (photoUrl != null) 'photoUrl': photoUrl,
+        'bestScore': bestScore,
+        'totalGames': totalGames,
+        'foodsEaten': foodsEaten,
+        'favoriteTheme': favoriteTheme,
+        'favoriteDifficulty': favoriteDifficulty,
+        'achievementsUnlocked': achievementsUnlocked,
+        'totalPlayTimeSeconds': totalPlayTimeSeconds,
+        if (country != null) 'country': country,
+        'isGuest': isGuest,
+        'friendsCount': friendsCount,
+        if (createdAt != null) 'createdAt': createdAt!.toIso8601String(),
+        if (lastSyncAt != null) 'lastSyncAt': lastSyncAt!.toIso8601String(),
+      };
+
+  factory UserProfile.fromCacheJson(Map<String, dynamic> d) => UserProfile(
+        uid: d['uid'] as String,
+        username: d['username'] as String? ?? '',
+        displayName: d['displayName'] as String?,
+        email: d['email'] as String?,
+        photoUrl: d['photoUrl'] as String?,
+        bestScore: (d['bestScore'] as num?)?.toInt() ?? 0,
+        totalGames: (d['totalGames'] as num?)?.toInt() ?? 0,
+        foodsEaten: (d['foodsEaten'] as num?)?.toInt() ?? 0,
+        favoriteTheme: d['favoriteTheme'] as String? ?? 'classic',
+        favoriteDifficulty: d['favoriteDifficulty'] as String? ?? 'medium',
+        achievementsUnlocked: (d['achievementsUnlocked'] as num?)?.toInt() ?? 0,
+        totalPlayTimeSeconds: (d['totalPlayTimeSeconds'] as num?)?.toInt() ?? 0,
+        country: d['country'] as String?,
+        isGuest: d['isGuest'] as bool? ?? false,
+        friendsCount: (d['friendsCount'] as num?)?.toInt() ?? 0,
+        createdAt: d['createdAt'] != null
+            ? DateTime.tryParse(d['createdAt'] as String)
+            : null,
+        lastSyncAt: d['lastSyncAt'] != null
+            ? DateTime.tryParse(d['lastSyncAt'] as String)
+            : null,
+      );
+
+  Map<String, dynamic> toFirestore() => {
+        'uid': uid,
+        if (username.isNotEmpty) 'username': username,
         if (username.isNotEmpty) 'usernameLower': username.toLowerCase(),
         if (displayName != null) 'displayName': displayName,
         if (email != null) 'email': email,

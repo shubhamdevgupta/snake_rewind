@@ -9,6 +9,7 @@ import '../../features/leaderboard/leaderboard_screen.dart';
 import '../../features/profile/profile_screen.dart';
 import '../../features/social/friends_screen.dart';
 import '../../features/statistics/statistics_screen.dart';
+import '../../shared/navigation/retro_navigation.dart';
 import '../../shared/widgets/retro_screen_shell.dart';
 import '../services/audio_service.dart';
 import '../services/storage_service.dart';
@@ -52,9 +53,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _open(Widget screen) {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => screen),
-    );
+    pushRetroScreen(context, screen);
   }
 
   Future<void> _play() async {

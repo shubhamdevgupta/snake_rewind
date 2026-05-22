@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/theme_manager.dart';
-import '../../data/controllers/social_controller.dart';
 import '../../data/models/friend_request.dart';
+import '../../data/repositories/friend_repository.dart';
 import '../../data/services/analytics_service.dart';
 import '../../data/services/auth_controller.dart';
 import '../../data/utils/username_validator.dart';
+import '../../shared/widgets/retro_avatar.dart';
 import '../../shared/widgets/retro_screen_shell.dart';
 import '../../shared/widgets/social_snackbar.dart';
 
@@ -17,19 +18,24 @@ class FriendRequestsScreen extends StatefulWidget {
 }
 
 class _FriendRequestsScreenState extends State<FriendRequestsScreen> {
+  final _friendRepo = FriendRepository();
+  late final Stream<List<FriendRequest>> _incomingStream;
+  late final Stream<List<FriendRequest>> _sentStream;
   String? _busyId;
 
   @override
   void initState() {
     super.initState();
     AnalyticsService.logScreen('friend_requests');
+    final uid = AuthController.instance.uid ?? '';
+    _incomingStream = _friendRepo.watchIncoming(uid);
+    _sentStream = _friendRepo.watchSent(uid);
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = ThemeManager.instance.theme;
     final uid = AuthController.instance.uid;
-    final social = SocialController.instance;
 
     return RetroScreenShell(
       title: 'REQUESTS',
@@ -37,39 +43,70 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen> {
           ? Center(
               child: Text(
                 'Sign in to manage requests',
-                style: TextStyle(color: theme.uiPrimary.withValues(alpha: 0.6)),
+                style: TextStyle(color: theme.textMuted),
               ),
             )
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                _sectionTitle(theme, 'INCOMING'),
+          : CustomScrollView(
+              physics: const BouncingScrollPhysics(
+                parent: AlwaysScrollableScrollPhysics(),
+              ),
+              slivers: [
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  sliver: SliverToBoxAdapter(child: _sectionTitle(theme, 'INCOMING')),
+                ),
                 StreamBuilder<List<FriendRequest>>(
-                  stream: social.watchIncoming(uid),
+                  stream: _incomingStream,
                   builder: (context, snap) {
+                    if (snap.connectionState == ConnectionState.waiting &&
+                        !snap.hasData) {
+                      return const SliverToBoxAdapter(
+                        child: Padding(
+                          padding: EdgeInsets.all(24),
+                          child: Center(child: CircularProgressIndicator()),
+                        ),
+                      );
+                    }
                     final list = snap.data ?? [];
                     if (list.isEmpty) {
-                      return _empty(theme, 'No pending requests.');
+                      return SliverToBoxAdapter(
+                        child: _empty(theme, 'No pending requests.'),
+                      );
                     }
-                    return Column(
-                      children: list.map((r) => _incomingCard(theme, r)).toList(),
+                    return SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, i) => RepaintBoundary(
+                          child: _incomingCard(theme, list[i]),
+                        ),
+                        childCount: list.length,
+                      ),
                     );
                   },
                 ),
-                const SizedBox(height: 24),
-                _sectionTitle(theme, 'SENT'),
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
+                  sliver: SliverToBoxAdapter(child: _sectionTitle(theme, 'SENT')),
+                ),
                 StreamBuilder<List<FriendRequest>>(
-                  stream: social.watchSent(uid),
+                  stream: _sentStream,
                   builder: (context, snap) {
                     final list = snap.data ?? [];
                     if (list.isEmpty) {
-                      return _empty(theme, 'No sent requests.');
+                      return SliverToBoxAdapter(
+                        child: _empty(theme, 'No sent requests.'),
+                      );
                     }
-                    return Column(
-                      children: list.map((r) => _sentCard(theme, r)).toList(),
+                    return SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, i) => RepaintBoundary(
+                          child: _sentCard(theme, list[i]),
+                        ),
+                        childCount: list.length,
+                      ),
                     );
                   },
                 ),
+                const SliverPadding(padding: EdgeInsets.only(bottom: 24)),
               ],
             ),
     );
@@ -93,17 +130,14 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen> {
   Widget _empty(dynamic theme, String text) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 16),
-      child: Text(
-        text,
-        style: TextStyle(color: theme.uiPrimary.withValues(alpha: 0.45), fontSize: 12),
-      ),
+      child: Text(text, style: TextStyle(color: theme.textMuted, fontSize: 12)),
     );
   }
 
   Widget _incomingCard(dynamic theme, FriendRequest r) {
     final busy = _busyId == r.id;
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         border: Border.all(color: theme.boardBorder),
@@ -111,22 +145,13 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen> {
       ),
       child: Row(
         children: [
-          CircleAvatar(
-            radius: 22,
-            backgroundColor: theme.uiSecondary,
-            backgroundImage: r.fromPhotoUrl != null
-                ? NetworkImage(r.fromPhotoUrl!)
-                : null,
-            child: r.fromPhotoUrl == null
-                ? Icon(Icons.person, color: theme.uiPrimary)
-                : null,
-          ),
+          RetroAvatar(photoUrl: r.fromPhotoUrl, radius: 22, theme: theme),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               UsernameValidator.display(r.fromUsername),
               style: TextStyle(
-                color: theme.uiPrimary,
+                color: theme.textOnSurface,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -141,7 +166,7 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen> {
 
   Widget _sentCard(dynamic theme, FriendRequest r) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         border: Border.all(color: theme.boardBorder),
@@ -151,12 +176,19 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen> {
           Expanded(
             child: Text(
               UsernameValidator.display(r.toUsername ?? 'player'),
-              style: TextStyle(color: theme.uiPrimary, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                color: theme.textOnSurface,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
           Text(
             'PENDING',
-            style: TextStyle(color: theme.scoreLabel, fontSize: 10, letterSpacing: 1),
+            style: TextStyle(
+              color: theme.textMuted,
+              fontSize: 10,
+              letterSpacing: 1,
+            ),
           ),
         ],
       ),
@@ -185,13 +217,13 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen> {
                   height: 12,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    color: theme.uiPrimary,
+                    color: theme.textOnSurface,
                   ),
                 )
               : Text(
                   label,
                   style: TextStyle(
-                    color: accent ? theme.uiAccent : theme.uiPrimary,
+                    color: accent ? theme.uiAccent : theme.textOnSurface,
                     fontSize: 9,
                     fontWeight: FontWeight.bold,
                   ),
@@ -205,13 +237,10 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen> {
     final me = AuthController.instance.profile;
     if (me == null) return;
     setState(() => _busyId = r.id);
-    final ok = await SocialController.instance.acceptRequest(r, me);
+    final ok = await _friendRepo.acceptRequest(request: r, myProfile: me);
     if (!mounted) return;
     setState(() => _busyId = null);
-    showRetroSnack(
-      context,
-      ok ? 'Friend added!' : 'Could not accept request',
-    );
+    showRetroSnack(context, ok ? 'Friend added!' : 'Could not accept request');
     if (ok) {
       AuthController.instance.updateProfileLocal(
         me.copyWith(friendsCount: me.friendsCount + 1),
@@ -223,7 +252,7 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen> {
     final uid = AuthController.instance.uid;
     if (uid == null) return;
     setState(() => _busyId = r.id);
-    await SocialController.instance.rejectRequest(r, uid);
+    await _friendRepo.rejectRequest(r, uid);
     if (!mounted) return;
     setState(() => _busyId = null);
     showRetroSnack(context, 'Request declined');
