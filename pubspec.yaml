@@ -1,7 +1,7 @@
 name: snake_game
 description: "Production-ready classic Nokia-style Snake game built with Flutter & Flame."
 publish_to: 'none'
-version: 1.0.2+3
+version: 1.0.3+4
 
 environment:
   sdk: ^3.11.5
