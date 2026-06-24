@@ -12,9 +12,11 @@ abstract final class FirebaseBootstrap {
 
   static Future<void> init() async {
     if (initialized) return;
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+    }
     await CrashlyticsService.init();
     await AnalyticsService.init();
     initialized = true;

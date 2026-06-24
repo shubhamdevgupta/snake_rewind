@@ -28,10 +28,9 @@ class DefaultFirebaseOptions {
     storageBucket: 'autocapture-2f9a7.appspot.com',
   );
 
-  /// Add ios/Runner/GoogleService-Info.plist and update these values for iOS.
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyC_M5nY4aTjyoTy9ERRrbIKrvprmXLFl5s',
-    appId: '1:149829529276:android:cb92a8196a14aca2a7eab9',
+    apiKey: 'AIzaSyDnYfoNQ5bM9LSTkBb9o8NoHhoBX-NBgYQ',
+    appId: '1:149829529276:ios:589c00e3db5169f2a7eab9',
     messagingSenderId: '149829529276',
     projectId: 'autocapture-2f9a7',
     storageBucket: 'autocapture-2f9a7.appspot.com',
