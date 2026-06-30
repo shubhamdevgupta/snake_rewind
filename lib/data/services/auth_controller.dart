@@ -3,26 +3,26 @@ import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../core/firebase/firebase_bootstrap.dart';
 import '../../game/services/storage_service.dart';
 import '../models/user_profile.dart';
 import '../repositories/auth_repository.dart';
 import '../repositories/friend_repository.dart';
 import '../repositories/user_repository.dart';
-import '../../core/firebase/firebase_bootstrap.dart';
 import '../services/crashlytics_service.dart';
 
-enum AuthMode { none, guest, google }
+enum AuthMode { none, guest, google, apple }
 
 class AuthController extends ChangeNotifier {
   AuthController._();
+
   static final AuthController instance = AuthController._();
 
   AuthRepository? _authRepo;
   final UserRepository _userRepo = UserRepository();
 
-  AuthRepository? get _auth => FirebaseBootstrap.initialized
-      ? (_authRepo ??= AuthRepository())
-      : null;
+  AuthRepository? get _auth =>
+      FirebaseBootstrap.initialized ? (_authRepo ??= AuthRepository()) : null;
 
   User? _firebaseUser;
   UserProfile? _profile;
@@ -35,14 +35,23 @@ class AuthController extends ChangeNotifier {
   String? _watchingUid;
 
   User? get firebaseUser => _firebaseUser;
+
   UserProfile? get profile => _profile;
+
   AuthMode get mode => _mode;
+
   bool get isLoading => _loading;
+
   bool get onboardingComplete => _onboardingComplete;
+
   bool get profileReady => !isSignedIn || _profileReady;
+
   bool get isResolvingSession => isSignedIn && !_profileReady;
+
   String? get error => _error;
+
   String? get uid => _firebaseUser?.uid;
+
   bool get isSignedIn => _firebaseUser != null;
 
   bool get needsUsernameSetup =>
@@ -148,6 +157,69 @@ class AuthController extends ChangeNotifier {
     }
   }
 
+  Future<void> signInWithApple() async {
+    if (_auth == null) {
+      _error = 'Firebase not available';
+      notifyListeners();
+      return;
+    }
+
+    _setLoading(true);
+    _profileReady = false;
+    notifyListeners();
+
+    try {
+      final cred = await _auth!.signInWithApple();
+      _firebaseUser = cred.user;
+      _mode = AuthMode.apple;
+
+      final id = _firebaseUser!.uid;
+
+      final existing = await _userRepo.fetchProfile(id);
+
+      if (existing != null) {
+        _profile = existing;
+
+        await _userRepo.mergeAuthMetadata(
+          uid: id,
+          email: _firebaseUser?.email,
+          photoUrl: _firebaseUser?.photoURL,
+          displayName:
+          _firebaseUser?.displayName ?? existing.displayName,
+        );
+      } else {
+        _profile = UserProfile(
+          uid: id,
+          username: '',
+          displayName:
+          _firebaseUser?.displayName ?? 'Player',
+          email: _firebaseUser?.email,
+          photoUrl: _firebaseUser?.photoURL,
+          isGuest: false,
+          createdAt: DateTime.now(),
+        );
+
+        await _userRepo.createOrUpdateProfile(_profile!);
+      }
+
+      await _persistProfileCache();
+      _profileReady = true;
+
+      await _completeOnboarding();
+
+      _startProfileWatch();
+    } catch (e, st) {
+      _error = 'Apple sign-in failed';
+
+      await CrashlyticsService.recordError(
+        e,
+        st,
+        reason: 'apple_auth',
+      );
+    } finally {
+      _setLoading(false);
+    }
+  }
   void _startProfileWatch() {
     final id = uid;
     if (id == null) return;

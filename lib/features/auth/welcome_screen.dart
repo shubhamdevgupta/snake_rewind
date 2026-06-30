@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import '../../core/theme/theme_manager.dart';
 import '../../data/services/analytics_service.dart';
@@ -93,6 +95,18 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                 if (auth.isLoading)
                   CircularProgressIndicator(color: theme.uiPrimary)
                 else ...[
+                  if (Platform.isIOS)
+                    SizedBox(
+                      width: double.infinity,
+                      child: RetroButton(
+                        theme: theme,
+                        label: 'CONTINUE WITH APPLE',
+                        onPressed: () => auth.signInWithApple(),
+                      ),
+                    ),
+
+                  if (Platform.isIOS)
+                    const SizedBox(height: 10),
                   SizedBox(
                     width: double.infinity,
                     child: Row(
