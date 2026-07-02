@@ -2,6 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../../core/errors/app_error.dart';
+import '../../core/errors/exception_mapper.dart';
+import '../../core/network/network_service.dart';
 import '../models/friend_request.dart';
 import '../models/public_user.dart';
 import '../models/user_profile.dart';
@@ -43,6 +46,13 @@ class SocialController extends ChangeNotifier {
     if (trimmed.length < 2) {
       _searchResults = [];
       _searchError = null;
+      _searching = false;
+      notifyListeners();
+      return;
+    }
+    if (!await NetworkService.ensureOnline()) {
+      _searchError = ExceptionMapper.message(const AppError.networkUnavailable());
+      _searchResults = [];
       _searching = false;
       notifyListeners();
       return;
@@ -90,8 +100,8 @@ class SocialController extends ChangeNotifier {
           );
         }).toList();
       }
-    } on Object {
-      _searchError = 'Search failed';
+    } on Object catch (error) {
+      _searchError = ExceptionMapper.message(error);
       _searchResults = [];
     } finally {
       _searching = false;
@@ -114,6 +124,14 @@ class SocialController extends ChangeNotifier {
       notifyListeners();
       return;
     }
+    if (!await NetworkService.ensureOnline()) {
+      _usernameAvailable = false;
+      _availabilityMessage = ExceptionMapper.message(
+        const AppError.networkUnavailable(),
+      );
+      notifyListeners();
+      return;
+    }
     _checkingAvailability = true;
     notifyListeners();
     try {
@@ -124,9 +142,9 @@ class SocialController extends ChangeNotifier {
       _usernameAvailable = available;
       _availabilityMessage =
           available ? 'Username available' : 'Username taken';
-    } on Object {
+    } on Object catch (error) {
       _usernameAvailable = false;
-      _availabilityMessage = 'Could not verify';
+      _availabilityMessage = ExceptionMapper.message(error);
     } finally {
       _checkingAvailability = false;
       notifyListeners();
@@ -142,6 +160,7 @@ class SocialController extends ChangeNotifier {
   Future<bool> claimUsername(UserProfile profile, String raw) async {
     final validation = UsernameValidator.validate(raw);
     if (!validation.isValid || validation.normalized == null) return false;
+    if (!await NetworkService.ensureOnline()) return false;
     final ok = await _usernames.claimUsername(
       uid: profile.uid,
       rawUsername: validation.normalized!,
@@ -175,6 +194,17 @@ class SocialController extends ChangeNotifier {
   Stream<int> watchIncomingCount(String uid) => _friends.watchIncomingCount(uid);
 
   FriendRepository get friendsRepo => _friends;
+
+  void reset() {
+    _debounce?.cancel();
+    _searching = false;
+    _checkingAvailability = false;
+    _searchResults = [];
+    _searchError = null;
+    _usernameAvailable = null;
+    _availabilityMessage = null;
+    notifyListeners();
+  }
 
   @override
   void dispose() {

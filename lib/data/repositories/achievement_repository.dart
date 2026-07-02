@@ -56,4 +56,16 @@ class AchievementRepository {
           : null,
     }, SetOptions(merge: true));
   }
+
+  Future<void> deleteAll(String uid) async {
+    final col = _achievements(uid);
+    if (col == null) return;
+    final snap = await col.get();
+    if (snap.docs.isEmpty) return;
+    final batch = _firestore!.batch();
+    for (final doc in snap.docs) {
+      batch.delete(doc.reference);
+    }
+    await batch.commit();
+  }
 }

@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import '../../core/constants/difficulty.dart';
+import '../../core/errors/exception_mapper.dart';
+import '../../core/network/network_service.dart';
 import '../../core/theme/theme_manager.dart';
 import '../../game/controllers/game_controller.dart';
 import '../achievements/achievement_engine.dart';
@@ -8,9 +10,9 @@ import '../models/leaderboard_entry.dart';
 import '../repositories/friend_repository.dart';
 import '../repositories/leaderboard_repository.dart';
 import '../repositories/user_repository.dart';
-import '../services/analytics_service.dart';
-import '../services/crashlytics_service.dart';
+import 'analytics_service.dart';
 import 'auth_controller.dart';
+import 'crashlytics_service.dart';
 
 /// Post-game cloud sync — runs async, never blocks the game loop.
 class ProgressionService {
@@ -38,6 +40,7 @@ class ProgressionService {
   Future<void> onGameEnd(GameOverInfo info, {required int foodsEaten}) async {
     final uid = AuthController.instance.uid;
     if (uid == null) return;
+    if (!await NetworkService.ensureOnline()) return;
 
     try {
       final settings = ThemeManager.instance.settings;
@@ -147,7 +150,9 @@ class ProgressionService {
         );
       }
     } on Object catch (e, st) {
-      await CrashlyticsService.recordError(e, st, reason: 'progression_sync');
+      if (ExceptionMapper.shouldReportToCrashlytics(e)) {
+        await CrashlyticsService.recordError(e, st, reason: 'progression_sync');
+      }
     }
   }
 }

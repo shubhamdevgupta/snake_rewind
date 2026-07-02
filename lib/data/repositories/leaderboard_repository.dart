@@ -87,4 +87,36 @@ class LeaderboardRepository {
       }).toList();
     });
   }
+
+  Future<void> deleteUserEntries(
+    String uid, {
+    List<String>? themeIds,
+  }) async {
+    final db = _firestore;
+    if (db == null) return;
+
+    final batch = db.batch();
+    var ops = 0;
+
+    void queueDelete(DocumentReference<Map<String, dynamic>> ref) {
+      batch.delete(ref);
+      ops++;
+    }
+
+    final global = _collection(LeaderboardType.global);
+    if (global != null) queueDelete(global.doc(uid));
+
+    final weekly = _collection(LeaderboardType.weekly);
+    if (weekly != null) queueDelete(weekly.doc(uid));
+
+    final friendsLb = _collection(LeaderboardType.friends);
+    if (friendsLb != null) queueDelete(friendsLb.doc(uid));
+
+    for (final themeId in themeIds ?? const ['classic']) {
+      final themeCol = _collection(LeaderboardType.theme, themeId: themeId);
+      if (themeCol != null) queueDelete(themeCol.doc(uid));
+    }
+
+    if (ops > 0) await batch.commit();
+  }
 }

@@ -5,6 +5,8 @@ import '../../data/controllers/social_controller.dart';
 import '../../data/services/analytics_service.dart';
 import '../../data/services/auth_controller.dart';
 import '../../data/utils/username_validator.dart';
+import '../../shared/services/app_guard.dart';
+import '../../shared/services/loading_controller.dart';
 import '../../shared/widgets/social_snackbar.dart';
 
 class UsernameSetupScreen extends StatefulWidget {
@@ -42,7 +44,8 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
     return validation.isValid &&
         social.usernameAvailable == true &&
         !social.isCheckingAvailability &&
-        !_submitting;
+        !_submitting &&
+        !AuthController.instance.isLoading;
   }
 
   Future<void> _continue() async {
@@ -50,10 +53,15 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
     final auth = AuthController.instance;
     final profile = auth.profile;
     if (profile == null) return;
+    if (!await AppGuard.ensureNetwork(context)) return;
+
     setState(() => _submitting = true);
-    final ok = await SocialController.instance.claimUsername(
-      profile,
-      _controller.text,
+    final ok = await LoadingController.instance.run(
+      () => SocialController.instance.claimUsername(
+        profile,
+        _controller.text,
+      ),
+      message: 'SAVING USERNAME',
     );
     if (!mounted) return;
     setState(() => _submitting = false);
@@ -175,7 +183,7 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
                         width: 2,
                       ),
                     ),
-                    child: _submitting
+                    child: _submitting || AuthController.instance.isLoading
                         ? SizedBox(
                             width: 22,
                             height: 22,

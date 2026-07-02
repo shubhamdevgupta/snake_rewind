@@ -149,6 +149,8 @@ abstract final class GameThemes {
     pixel,
   ];
 
+  static List<String> get allIds => all.map((t) => t.id).toList(growable: false);
+
   static GameThemeData byId(String id) {
     return all.firstWhere(
       (t) => t.id == id,

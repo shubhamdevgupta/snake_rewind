@@ -5,16 +5,19 @@ import 'package:flutter/services.dart';
 
 import 'app_root.dart';
 import 'core/firebase/firebase_bootstrap.dart';
+import 'core/network/network_service.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_manager.dart';
 import 'data/services/auth_controller.dart';
 import 'game/services/audio_service.dart';
 import 'game/services/storage_service.dart';
+import 'shared/widgets/global_loading_overlay.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await StorageService.init();
+  await NetworkService.init();
   await AudioService.init();
   await ThemeManager.instance.load();
   await FirebaseBootstrap.safeInit();
@@ -59,6 +62,11 @@ class _SnakeAppState extends State<SnakeApp> {
       title: 'Snake Rewind',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.current,
+      builder: (context, child) {
+        return GlobalLoadingOverlay(
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
       home: const AppRoot(),
     );
   }

@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../core/errors/exception_mapper.dart';
+
 abstract final class CrashlyticsService {
   static FirebaseCrashlytics? _crashlytics;
 
@@ -11,11 +13,17 @@ abstract final class CrashlyticsService {
     await _crashlytics!.setCrashlyticsCollectionEnabled(!kDebugMode);
 
     FlutterError.onError = (details) {
-      _crashlytics?.recordFlutterFatalError(details);
+      if (ExceptionMapper.shouldReportToCrashlytics(details.exception)) {
+        _crashlytics?.recordFlutterFatalError(details);
+      } else if (kDebugMode) {
+        FlutterError.presentError(details);
+      }
     };
 
     PlatformDispatcher.instance.onError = (error, stack) {
-      _crashlytics?.recordError(error, stack, fatal: true);
+      if (ExceptionMapper.shouldReportToCrashlytics(error)) {
+        _crashlytics?.recordError(error, stack, fatal: true);
+      }
       return true;
     };
   }
@@ -26,6 +34,7 @@ abstract final class CrashlyticsService {
     String? reason,
     bool fatal = false,
   }) async {
+    if (!ExceptionMapper.shouldReportToCrashlytics(error)) return;
     await _crashlytics?.recordError(
       error,
       stack,

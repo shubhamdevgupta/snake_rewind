@@ -1,8 +1,12 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+
 import '../../core/theme/theme_manager.dart';
 import '../../data/services/analytics_service.dart';
 import '../../data/services/auth_controller.dart';
 import '../../game/widgets/retro_button.dart';
+import '../../shared/widgets/retro_dialogs.dart';
 
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key});
@@ -23,10 +27,16 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       duration: const Duration(milliseconds: 900),
     )..forward();
     AnalyticsService.logScreen('welcome');
+    AuthController.instance.addListener(_onAuthChanged);
+  }
+
+  void _onAuthChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    AuthController.instance.removeListener(_onAuthChanged);
     _anim.dispose();
     super.dispose();
   }
@@ -35,6 +45,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   Widget build(BuildContext context) {
     final theme = ThemeManager.instance.theme;
     final auth = AuthController.instance;
+    final busy = auth.isLoading;
 
     return Scaffold(
       backgroundColor: theme.scaffold,
@@ -87,46 +98,56 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                     padding: const EdgeInsets.only(bottom: 12),
                     child: Text(
                       auth.error!,
+                      textAlign: TextAlign.center,
                       style: TextStyle(color: theme.uiAccent, fontSize: 12),
                     ),
                   ),
-                if (auth.isLoading)
-                  CircularProgressIndicator(color: theme.uiPrimary)
-                else ...[
+                if (Platform.isIOS)
                   SizedBox(
                     width: double.infinity,
-                    child: Row(
-                      children: [
-                        RetroButton(
-                          theme: theme,
-                          label: 'Sign In With Google',
-                          flex: 2,
-                          onPressed: () => auth.signInWithGoogle(),
-                        ),
-                      ],
+                    child: RetroButton(
+                      theme: theme,
+                      label: 'CONTINUE WITH APPLE',
+                      onPressed: busy ? null : () => auth.signInWithApple(),
                     ),
                   ),
-                  const SizedBox(height: 10),
-                  SizedBox(
-                    width: double.infinity,
-                    child: Row(
-                      children: [
-                        RetroButton(
-                          theme: theme,
-                          label: 'GUEST',
-                          flex: 2,
-                          onPressed: () => auth.continueAsGuest(),
-                        ),
-                      ],
-                    ),
+                if (Platform.isIOS) const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: Row(
+                    children: [
+                      RetroButton(
+                        theme: theme,
+                        label: 'Sign In With Google',
+                        flex: 2,
+                        onPressed: busy ? null : () => auth.signInWithGoogle(),
+                      ),
+                    ],
                   ),
-                ],
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: Row(
+                    children: [
+                      RetroButton(
+                        theme: theme,
+                        label: 'GUEST',
+                        flex: 2,
+                        onPressed: busy ? null : () => auth.continueAsGuest(),
+                      ),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 24),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     _link(theme, 'Privacy'),
-                    Text(' · ', style: TextStyle(color: theme.uiPrimary.withValues(alpha: 0.4))),
+                    Text(
+                      ' · ',
+                      style: TextStyle(color: theme.uiPrimary.withValues(alpha: 0.4)),
+                    ),
                     _link(theme, 'Terms'),
                   ],
                 ),
@@ -141,22 +162,10 @@ class _WelcomeScreenState extends State<WelcomeScreen>
 
   Widget _link(dynamic theme, String label) {
     return TextButton(
-      onPressed: () => showDialog<void>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          backgroundColor: theme.scaffold,
-          title: Text(label, style: TextStyle(color: theme.uiPrimary)),
-          content: Text(
-            'Add your $label policy URL before Play Store release.',
-            style: TextStyle(color: theme.uiPrimary.withValues(alpha: 0.7)),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text('OK', style: TextStyle(color: theme.uiAccent)),
-            ),
-          ],
-        ),
+      onPressed: () => RetroDialogs.showError(
+        context,
+        title: label.toUpperCase(),
+        message: 'Add your $label policy URL before App Store release.',
       ),
       child: Text(
         label,

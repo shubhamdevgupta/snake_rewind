@@ -7,8 +7,11 @@ import '../../data/utils/username_validator.dart';
 import '../../features/achievements/achievements_screen.dart';
 import '../../features/social/friends_screen.dart';
 import '../../shared/navigation/retro_navigation.dart';
+import '../../shared/services/app_guard.dart';
 import '../../shared/widgets/retro_avatar.dart';
+import '../../shared/widgets/retro_dialogs.dart';
 import '../../shared/widgets/retro_screen_shell.dart';
+import '../../shared/widgets/social_snackbar.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -18,10 +21,99 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  bool _busy = false;
+
   @override
   void initState() {
     super.initState();
     AnalyticsService.logScreen('profile');
+    AuthController.instance.addListener(_onAuthChanged);
+  }
+
+  void _onAuthChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    AuthController.instance.removeListener(_onAuthChanged);
+    super.dispose();
+  }
+
+  bool get _isBusy => _busy || AuthController.instance.isLoading;
+
+  Future<void> _logout() async {
+    if (_isBusy) return;
+    final confirmed = await RetroDialogs.showConfirmation(
+      context,
+      title: 'LOG OUT?',
+      message: 'You will return to the welcome screen.',
+      confirmLabel: 'LOG OUT',
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _busy = true);
+    await AuthController.instance.signOut();
+    if (!mounted) return;
+    setState(() => _busy = false);
+
+    final error = AuthController.instance.error;
+    if (error != null) {
+      await RetroDialogs.showError(context, message: error);
+      return;
+    }
+
+    Navigator.of(context).popUntil((route) => route.isFirst);
+  }
+
+  Future<void> _deleteAccount() async {
+    if (_isBusy) return;
+    final confirmed = await RetroDialogs.showConfirmation(
+      context,
+      title: 'DELETE ACCOUNT?',
+      message: 'This action cannot be undone.',
+      confirmLabel: 'DELETE',
+      destructive: true,
+    );
+    if (confirmed != true || !mounted) return;
+
+    if (!await AppGuard.ensureNetwork(context)) return;
+
+    setState(() => _busy = true);
+    var result = await AuthController.instance.deleteAccount();
+    if (result == DeleteAccountResult.requiresReauth && mounted) {
+      final reauth = await RetroDialogs.showConfirmation(
+        context,
+        title: 'VERIFY IDENTITY',
+        message:
+            'For your security, please sign in again to delete your account.',
+        confirmLabel: 'CONTINUE',
+      );
+      if (reauth == true) {
+        result = await AuthController.instance.reauthenticateAndDeleteAccount();
+      } else {
+        result = DeleteAccountResult.cancelled;
+      }
+    }
+    if (!mounted) return;
+    setState(() => _busy = false);
+
+    switch (result) {
+      case DeleteAccountResult.success:
+        Navigator.of(context).popUntil((route) => route.isFirst);
+        if (mounted) {
+          showRetroSnack(context, 'Account deleted');
+        }
+      case DeleteAccountResult.cancelled:
+        break;
+      case DeleteAccountResult.requiresReauth:
+      case DeleteAccountResult.failed:
+        final message = AuthController.instance.error ??
+            'Unable to delete account. Please try again.';
+        if (mounted) {
+          await RetroDialogs.showError(context, message: message);
+        }
+    }
   }
 
   @override
@@ -123,12 +215,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     _ProfileButton(
                       theme: theme,
                       label: 'ADD FRIENDS',
+                      enabled: !_isBusy,
                       onTap: () => pushRetroScreen(context, const FriendsScreen()),
                     ),
                     const SizedBox(height: 8),
                     _ProfileButton(
                       theme: theme,
                       label: 'ACHIEVEMENTS',
+                      enabled: !_isBusy,
                       onTap: () =>
                           pushRetroScreen(context, const AchievementsScreen()),
                     ),
@@ -136,12 +230,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     _ProfileButton(
                       theme: theme,
                       label: 'LOGOUT',
-                      onTap: () async {
-                        await AuthController.instance.signOut();
-                        if (context.mounted) {
-                          Navigator.of(context).popUntil((r) => r.isFirst);
-                        }
-                      },
+                      enabled: !_isBusy,
+                      onTap: _logout,
+                    ),
+                    const SizedBox(height: 8),
+                    _ProfileButton(
+                      theme: theme,
+                      label: 'DELETE ACCOUNT',
+                      enabled: !_isBusy,
+                      accent: theme.uiAccent,
+                      onTap: _deleteAccount,
                     ),
                     const SizedBox(height: 8),
                   ]),
@@ -207,18 +305,25 @@ class _ProfileButton extends StatelessWidget {
     required this.theme,
     required this.label,
     required this.onTap,
+    this.enabled = true,
+    this.accent,
   });
 
   final dynamic theme;
   final String label;
   final VoidCallback onTap;
+  final bool enabled;
+  final Color? accent;
 
   @override
   Widget build(BuildContext context) {
+    final textColor = enabled
+        ? (accent ?? theme.textOnSurface)
+        : theme.textMuted;
     return Material(
-      color: theme.uiSecondary,
+      color: enabled ? theme.uiSecondary : theme.scoreBackground,
       child: InkWell(
-        onTap: onTap,
+        onTap: enabled ? onTap : null,
         child: Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 14),
@@ -229,7 +334,7 @@ class _ProfileButton extends StatelessWidget {
           child: Text(
             label,
             style: TextStyle(
-              color: theme.textOnSurface,
+              color: textColor,
               fontWeight: FontWeight.bold,
               letterSpacing: 2,
             ),
