@@ -3,15 +3,28 @@ import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../core/errors/app_error.dart';
+import '../../core/errors/exception_mapper.dart';
+import '../../core/network/network_service.dart';
 import '../../core/firebase/firebase_bootstrap.dart';
 import '../../game/services/storage_service.dart';
+import '../../shared/services/loading_controller.dart';
+import '../controllers/social_controller.dart';
 import '../models/user_profile.dart';
 import '../repositories/auth_repository.dart';
 import '../repositories/friend_repository.dart';
 import '../repositories/user_repository.dart';
-import '../services/crashlytics_service.dart';
+import '../services/account_deletion_service.dart';
+import 'crashlytics_service.dart';
 
 enum AuthMode { none, guest, google, apple }
+
+enum DeleteAccountResult {
+  success,
+  requiresReauth,
+  failed,
+  cancelled,
+}
 
 class AuthController extends ChangeNotifier {
   AuthController._();
@@ -20,6 +33,7 @@ class AuthController extends ChangeNotifier {
 
   AuthRepository? _authRepo;
   final UserRepository _userRepo = UserRepository();
+  final AccountDeletionService _accountDeletion = AccountDeletionService();
 
   AuthRepository? get _auth =>
       FirebaseBootstrap.initialized ? (_authRepo ??= AuthRepository()) : null;
@@ -40,7 +54,7 @@ class AuthController extends ChangeNotifier {
 
   AuthMode get mode => _mode;
 
-  bool get isLoading => _loading;
+  bool get isLoading => _loading || LoadingController.instance.isLoading;
 
   bool get onboardingComplete => _onboardingComplete;
 
@@ -64,7 +78,7 @@ class AuthController extends ChangeNotifier {
     if (_auth != null) {
       _firebaseUser = _auth!.currentUser;
       if (_firebaseUser != null) {
-        _mode = _firebaseUser!.isAnonymous ? AuthMode.guest : AuthMode.google;
+        _mode = _detectMode(_firebaseUser!);
         final cached = await _userRepo.loadCachedProfile(_firebaseUser!.uid);
         if (cached != null) {
           _profile = cached;
@@ -78,154 +92,258 @@ class AuthController extends ChangeNotifier {
   }
 
   Future<void> continueAsGuest() async {
-    if (_auth == null) {
-      _error = 'Firebase not available';
-      notifyListeners();
-      return;
-    }
-    _setLoading(true);
-    _profileReady = false;
-    try {
-      final cred = await _auth!.signInAsGuest();
-      _firebaseUser = cred.user;
-      _mode = AuthMode.guest;
-      final existing = await _userRepo.fetchProfile(_firebaseUser!.uid);
-      if (existing != null) {
-        _profile = existing;
-      } else {
-        _profile = UserProfile.guest(_firebaseUser!.uid);
-        await _userRepo.createOrUpdateProfile(_profile!);
-      }
-      await _persistProfileCache();
-      _profileReady = true;
-      await _completeOnboarding();
-      _startProfileWatch();
-    } on Object catch (e, st) {
-      _error = 'Guest sign-in failed';
-      await CrashlyticsService.recordError(e, st, reason: 'guest_auth');
-    } finally {
-      _setLoading(false);
-    }
+    await _runAuthFlow(
+      loadingMessage: 'SIGNING IN',
+      action: () async {
+        final cred = await _auth!.signInAsGuest();
+        _firebaseUser = cred.user;
+        _mode = AuthMode.guest;
+        await _bootstrapProfileAfterSignIn(isGuest: true);
+      },
+      reason: 'guest_auth',
+      fallbackMessage: 'Guest sign-in failed',
+    );
   }
 
   Future<void> signInWithGoogle() async {
+    await _runAuthFlow(
+      loadingMessage: 'SIGNING IN',
+      action: () async {
+        final cred = await _auth!.signInWithGoogle();
+        _firebaseUser = cred.user;
+        _mode = AuthMode.google;
+        await _bootstrapProfileAfterSignIn(isGuest: false);
+      },
+      reason: 'google_auth',
+      fallbackMessage: 'Google sign-in failed',
+    );
+  }
+
+  Future<void> signInWithApple() async {
+    await _runAuthFlow(
+      loadingMessage: 'SIGNING IN',
+      action: () async {
+        final cred = await _auth!.signInWithApple();
+        _firebaseUser = cred.user;
+        _mode = AuthMode.apple;
+        await _bootstrapProfileAfterSignIn(isGuest: false);
+      },
+      reason: 'apple_auth',
+      fallbackMessage: 'Apple sign-in failed',
+    );
+  }
+
+  Future<DeleteAccountResult> deleteAccount() async {
+    if (_auth == null || uid == null) {
+      _error = 'Firebase not available';
+      notifyListeners();
+      return DeleteAccountResult.failed;
+    }
+
+    if (!await NetworkService.ensureOnline()) {
+      _error = ExceptionMapper.message(const AppError.networkUnavailable());
+      notifyListeners();
+      return DeleteAccountResult.failed;
+    }
+
+    try {
+      return await LoadingController.instance.run(() async {
+        _setLoading(true);
+        try {
+          final id = uid!;
+          final username =
+              _profile?.hasValidUsername == true ? _profile!.username : null;
+
+          await _accountDeletion.deleteAllRemoteData(
+            uid: id,
+            username: username,
+          );
+          await _auth!.deleteCurrentUser();
+          await _clearLocalSession(id);
+          return DeleteAccountResult.success;
+        } on FirebaseAuthException catch (e, st) {
+          if (e.code == 'requires-recent-login') {
+            return DeleteAccountResult.requiresReauth;
+          }
+          _error = ExceptionMapper.message(e);
+          if (ExceptionMapper.shouldReportToCrashlytics(e)) {
+            await CrashlyticsService.recordError(e, st, reason: 'delete_account');
+          }
+          return DeleteAccountResult.failed;
+        } on Object catch (e, st) {
+          _error = ExceptionMapper.message(e);
+          if (ExceptionMapper.shouldReportToCrashlytics(e)) {
+            await CrashlyticsService.recordError(e, st, reason: 'delete_account');
+          }
+          return DeleteAccountResult.failed;
+        } finally {
+          _setLoading(false);
+        }
+      }, message: 'DELETING ACCOUNT');
+    } on Object catch (e, st) {
+      _error = ExceptionMapper.message(e);
+      if (ExceptionMapper.shouldReportToCrashlytics(e)) {
+        await CrashlyticsService.recordError(e, st, reason: 'delete_account');
+      }
+      return DeleteAccountResult.failed;
+    }
+  }
+
+  Future<DeleteAccountResult> reauthenticateAndDeleteAccount() async {
+    if (_auth == null) return DeleteAccountResult.failed;
+
+    try {
+      await LoadingController.instance.run(() async {
+        switch (_mode) {
+          case AuthMode.google:
+            await _auth!.reauthenticateWithGoogle();
+          case AuthMode.apple:
+            await _auth!.reauthenticateWithApple();
+          case AuthMode.guest:
+          case AuthMode.none:
+            break;
+        }
+      }, message: 'VERIFYING');
+    } on Object catch (e, st) {
+      final message = ExceptionMapper.message(e);
+      if (message.toLowerCase().contains('cancelled')) {
+        return DeleteAccountResult.cancelled;
+      }
+      _error = message;
+      if (ExceptionMapper.shouldReportToCrashlytics(e)) {
+        await CrashlyticsService.recordError(e, st, reason: 'reauth_delete');
+      }
+      notifyListeners();
+      return DeleteAccountResult.failed;
+    }
+
+    return deleteAccount();
+  }
+
+  Future<void> signOut() async {
+    await LoadingController.instance.run(() async {
+      _setLoading(true);
+      try {
+        final id = uid;
+        await _profileSub?.cancel();
+        _profileSub = null;
+        _watchingUid = null;
+        try {
+          await _auth?.signOut();
+        } on Object catch (e, st) {
+          _error = ExceptionMapper.message(e);
+          if (ExceptionMapper.shouldReportToCrashlytics(e)) {
+            await CrashlyticsService.recordError(e, st, reason: 'sign_out');
+          }
+        }
+        if (id != null) {
+          await _clearLocalSession(id);
+        } else {
+          await _resetSessionState();
+        }
+      } finally {
+        _setLoading(false);
+      }
+    }, message: 'SIGNING OUT');
+  }
+
+  Future<void> refreshProfile() async {
+    if (!await NetworkService.ensureOnline()) {
+      _error = ExceptionMapper.message(const AppError.networkUnavailable());
+      notifyListeners();
+      return;
+    }
+    await LoadingController.instance.run(() async {
+      await _loadProfile();
+    }, message: 'SYNCING');
+  }
+
+  void updateProfileLocal(UserProfile profile) {
+    _profile = profile;
+    unawaited(_persistProfileCache());
+    notifyListeners();
+  }
+
+  AuthMode _detectMode(User user) {
+    if (user.isAnonymous) return AuthMode.guest;
+    for (final provider in user.providerData) {
+      if (provider.providerId == 'apple.com') return AuthMode.apple;
+      if (provider.providerId == 'google.com') return AuthMode.google;
+    }
+    return AuthMode.google;
+  }
+
+  Future<void> _runAuthFlow({
+    required String loadingMessage,
+    required Future<void> Function() action,
+    required String reason,
+    required String fallbackMessage,
+  }) async {
     if (_auth == null) {
       _error = 'Firebase not available';
       notifyListeners();
       return;
     }
-    _setLoading(true);
-    _profileReady = false;
-    notifyListeners();
-    try {
-      final cred = await _auth!.signInWithGoogle();
-      _firebaseUser = cred.user;
-      _mode = AuthMode.google;
-      final id = _firebaseUser!.uid;
 
-      final existing = await _userRepo.fetchProfile(id);
-      if (existing != null) {
-        _profile = existing;
+    if (!await NetworkService.ensureOnline()) {
+      _error = ExceptionMapper.message(const AppError.networkUnavailable());
+      notifyListeners();
+      return;
+    }
+
+    await LoadingController.instance.run(() async {
+      _setLoading(true);
+      _profileReady = false;
+      notifyListeners();
+      try {
+        await action();
+      } on Object catch (e, st) {
+        _error = ExceptionMapper.message(e);
+        if (_error == fallbackMessage && e is! FirebaseAuthException) {
+          _error = ExceptionMapper.message(e);
+        }
+        if (ExceptionMapper.shouldReportToCrashlytics(e)) {
+          await CrashlyticsService.recordError(e, st, reason: reason);
+        }
+      } finally {
+        _setLoading(false);
+      }
+    }, message: loadingMessage);
+  }
+
+  Future<void> _bootstrapProfileAfterSignIn({required bool isGuest}) async {
+    final id = _firebaseUser!.uid;
+    final existing = await _userRepo.fetchProfile(id);
+    if (existing != null) {
+      _profile = existing;
+      if (!isGuest) {
         await _userRepo.mergeAuthMetadata(
           uid: id,
           email: _firebaseUser!.email,
           photoUrl: _firebaseUser!.photoURL,
           displayName: _firebaseUser!.displayName ?? existing.displayName,
         );
-      } else {
-        _profile = UserProfile(
-          uid: id,
-          username: '',
-          displayName: _firebaseUser?.displayName ?? 'Player',
-          email: _firebaseUser?.email,
-          photoUrl: _firebaseUser?.photoURL,
-          isGuest: false,
-          createdAt: DateTime.now(),
-        );
-        await _userRepo.createOrUpdateProfile(_profile!);
       }
-
-      await _persistProfileCache();
-      _profileReady = true;
-      await _completeOnboarding();
-      _startProfileWatch();
-    } on Object catch (e, st) {
-      _error = 'Google sign-in failed';
-      await CrashlyticsService.recordError(e, st, reason: 'google_auth');
-    } finally {
-      _setLoading(false);
+    } else {
+      _profile = isGuest
+          ? UserProfile.guest(id)
+          : UserProfile(
+              uid: id,
+              username: '',
+              displayName: _firebaseUser?.displayName ?? 'Player',
+              email: _firebaseUser?.email,
+              photoUrl: _firebaseUser?.photoURL,
+              isGuest: false,
+              createdAt: DateTime.now(),
+            );
+      await _userRepo.createOrUpdateProfile(_profile!);
     }
+    await _persistProfileCache();
+    _profileReady = true;
+    await _completeOnboarding();
+    _startProfileWatch();
   }
 
-  Future<void> signInWithApple() async {
-    if (_auth == null) {
-      _error = 'Firebase not available';
-      notifyListeners();
-      return;
-    }
-
-    _setLoading(true);
-    _profileReady = false;
-    notifyListeners();
-
-    try {
-      final cred = await _auth!.signInWithApple();
-      _firebaseUser = cred.user;
-      _mode = AuthMode.apple;
-
-      final id = _firebaseUser!.uid;
-
-      final existing = await _userRepo.fetchProfile(id);
-
-      if (existing != null) {
-        _profile = existing;
-
-        await _userRepo.mergeAuthMetadata(
-          uid: id,
-          email: _firebaseUser?.email,
-          photoUrl: _firebaseUser?.photoURL,
-          displayName:
-          _firebaseUser?.displayName ?? existing.displayName,
-        );
-      } else {
-        _profile = UserProfile(
-          uid: id,
-          username: '',
-          displayName:
-          _firebaseUser?.displayName ?? 'Player',
-          email: _firebaseUser?.email,
-          photoUrl: _firebaseUser?.photoURL,
-          isGuest: false,
-          createdAt: DateTime.now(),
-        );
-
-        await _userRepo.createOrUpdateProfile(_profile!);
-      }
-
-      await _persistProfileCache();
-      _profileReady = true;
-
-      await _completeOnboarding();
-
-      _startProfileWatch();
-    } on FirebaseAuthException catch (e, st) {
-      print("==========================");
-      print(e.code);
-      print(e.message);
-      print(e.credential);
-      print("==========================");
-
-      await CrashlyticsService.recordError(
-        e,
-        st,
-        reason: 'apple_auth',
-      );
-    }
-
-    finally {
-      _setLoading(false);
-    }
-  }
   void _startProfileWatch() {
     final id = uid;
     if (id == null) return;
@@ -250,30 +368,20 @@ class AuthController extends ChangeNotifier {
         cur.photoUrl != next.photoUrl;
   }
 
-  Future<void> signOut() async {
-    final id = uid;
-    await _profileSub?.cancel();
-    _profileSub = null;
-    _watchingUid = null;
-    await _auth?.signOut();
+  Future<void> _clearLocalSession(String id) async {
+    await StorageService.clearSessionForUser(id);
+    FriendRepository.clearStreamCache();
+    SocialController.instance.reset();
+    await _resetSessionState();
+  }
+
+  Future<void> _resetSessionState() async {
     _firebaseUser = null;
     _profile = null;
     _profileReady = false;
     _mode = AuthMode.none;
     _onboardingComplete = false;
-    if (id != null) await StorageService.clearCachedProfile(id);
-    FriendRepository.clearStreamCache();
-    await StorageService.saveOnboardingComplete(false);
-    notifyListeners();
-  }
-
-  Future<void> refreshProfile() async {
-    await _loadProfile();
-  }
-
-  void updateProfileLocal(UserProfile profile) {
-    _profile = profile;
-    unawaited(_persistProfileCache());
+    _error = null;
     notifyListeners();
   }
 
@@ -315,7 +423,7 @@ class AuthController extends ChangeNotifier {
 
   void _setLoading(bool value) {
     _loading = value;
-    _error = null;
+    if (value) _error = null;
     notifyListeners();
   }
 }

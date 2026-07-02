@@ -25,7 +25,7 @@ class RetroButton extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(4),
         child: Material(
-          color: theme.uiSecondary,
+          color: onPressed != null ? theme.uiSecondary : theme.scoreBackground,
           child: InkWell(
             onTap: onPressed,
             child: AnimatedContainer(
@@ -44,11 +44,19 @@ class RetroButton extends StatelessWidget {
                     : null,
               ),
               child: icon != null
-                  ? Icon(icon, color: theme.uiPrimary, size: 28)
+                  ? Icon(
+                      icon,
+                      color: onPressed != null
+                          ? theme.uiPrimary
+                          : theme.textMuted,
+                      size: 28,
+                    )
                   : Text(
                       label,
                       style: TextStyle(
-                        color: theme.uiPrimary,
+                        color: onPressed != null
+                            ? theme.uiPrimary
+                            : theme.textMuted,
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
                         letterSpacing: 1,

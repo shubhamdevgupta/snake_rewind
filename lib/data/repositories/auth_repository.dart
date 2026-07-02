@@ -35,11 +35,14 @@ class AuthRepository {
     return _auth.signInWithCredential(credential);
   }
   Future<UserCredential> signInWithApple() async {
+    if (!Platform.isIOS && !Platform.isMacOS) {
+      throw UnsupportedError('Sign in with Apple is only supported on Apple platforms');
+    }
+
     final rawNonce = _generateNonce();
     final nonce = _sha256ofString(rawNonce);
 
-    final appleCredential =
-    await SignInWithApple.getAppleIDCredential(
+    final appleCredential = await SignInWithApple.getAppleIDCredential(
       scopes: [
         AppleIDAuthorizationScopes.email,
         AppleIDAuthorizationScopes.fullName,
@@ -47,26 +50,25 @@ class AuthRepository {
       nonce: nonce,
     );
 
-    print("============== APPLE RESPONSE ==============");
-    print("identityToken: ${appleCredential.identityToken != null}");
-    print("authorizationCode: ${appleCredential.authorizationCode != null}");
-    print("userIdentifier: ${appleCredential.userIdentifier}");
-    print("email: ${appleCredential.email}");
-    print("============================================");
+    final idToken = appleCredential.identityToken;
+    if (idToken == null) {
+      throw StateError('Apple Sign-In failed: missing identity token');
+    }
 
-    final oauthCredential = OAuthProvider("apple.com").credential(
-      idToken: appleCredential.identityToken,
-      rawNonce: rawNonce,
+    // Use AppleAuthProvider (native Apple credential path), not OAuthProvider.
+    // OAuthProvider("apple.com") routes through signInMethod "oauth", which since
+    // firebase_auth 5.2.0 requires accessToken (authorizationCode) and throws
+    // invalid-credential when it is omitted.
+    final oauthCredential = AppleAuthProvider.credentialWithIDToken(
+      idToken,
+      rawNonce,
+      AppleFullPersonName(
+        givenName: appleCredential.givenName,
+        familyName: appleCredential.familyName,
+      ),
     );
 
-    print("Creating Firebase credential...");
-
-    final result = await FirebaseAuth.instance.signInWithCredential(
-      oauthCredential,
-    );
-
-    print("Firebase login success");
-    return result;
+    return _auth.signInWithCredential(oauthCredential);
   }
   String _generateNonce([int length = 32]) {
     const charset =
@@ -90,7 +92,62 @@ class AuthRepository {
     if (await _googleSignIn.isSignedIn()) {
       await _googleSignIn.signOut();
     }
-
+    await _googleSignIn.disconnect();
     await _auth.signOut();
+  }
+
+  Future<void> deleteCurrentUser() async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw StateError('Not signed in');
+    }
+    await user.delete();
+  }
+
+  Future<void> reauthenticateWithGoogle() async {
+    final account = await _googleSignIn.signIn();
+    if (account == null) {
+      throw StateError('Google sign-in cancelled');
+    }
+    final auth = await account.authentication;
+    final credential = GoogleAuthProvider.credential(
+      accessToken: auth.accessToken,
+      idToken: auth.idToken,
+    );
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw StateError('Not signed in');
+    }
+    await user.reauthenticateWithCredential(credential);
+  }
+
+  Future<void> reauthenticateWithApple() async {
+    if (!Platform.isIOS && !Platform.isMacOS) {
+      throw UnsupportedError('Sign in with Apple is only supported on Apple platforms');
+    }
+
+    final rawNonce = _generateNonce();
+    final nonce = _sha256ofString(rawNonce);
+    final appleCredential = await SignInWithApple.getAppleIDCredential(
+      scopes: [AppleIDAuthorizationScopes.email],
+      nonce: nonce,
+    );
+    final idToken = appleCredential.identityToken;
+    if (idToken == null) {
+      throw StateError('Apple Sign-In failed: missing identity token');
+    }
+    final credential = AppleAuthProvider.credentialWithIDToken(
+      idToken,
+      rawNonce,
+      AppleFullPersonName(
+        givenName: appleCredential.givenName,
+        familyName: appleCredential.familyName,
+      ),
+    );
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw StateError('Not signed in');
+    }
+    await user.reauthenticateWithCredential(credential);
   }
 }

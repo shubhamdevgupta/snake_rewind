@@ -88,4 +88,16 @@ class UserRepository {
       return UserProfile.fromFirestore(s);
     });
   }
+
+  Future<void> deleteProfileDocument(String uid) async {
+    final ref = _user(uid);
+    if (ref == null) return;
+    await ref.delete();
+  }
+
+  Future<void> deleteStats(String uid) async {
+    final ref = _stats(uid);
+    if (ref == null) return;
+    await ref.delete();
+  }
 }

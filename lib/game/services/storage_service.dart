@@ -95,6 +95,22 @@ abstract final class StorageService {
     await _prefs!.remove(_profileCacheKey(uid));
   }
 
+  static Future<void> clearAllCachedProfiles() async {
+    await _ensureInit();
+    final keys = _prefs!
+        .getKeys()
+        .where((key) => key.startsWith(keyCachedProfilePrefix))
+        .toList();
+    for (final key in keys) {
+      await _prefs!.remove(key);
+    }
+  }
+
+  static Future<void> clearSessionForUser(String uid) async {
+    await clearCachedProfile(uid);
+    await saveOnboardingComplete(false);
+  }
+
   static Future<void> _ensureInit() async {
     _prefs ??= await SharedPreferences.getInstance();
   }

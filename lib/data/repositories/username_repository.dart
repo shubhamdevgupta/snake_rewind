@@ -104,6 +104,16 @@ class UsernameRepository {
       return false;
     }
   }
+
+  Future<void> releaseUsername(String username, {required String uid}) async {
+    final names = _usernames;
+    if (names == null) return;
+    final ref = names.doc(UsernameValidator.normalize(username));
+    final snap = await ref.get();
+    if (snap.exists && snap.data()?['uid'] == uid) {
+      await ref.delete();
+    }
+  }
 }
 
 /// Lightweight search DTO (no uid in UI layer — use via PublicUser).

@@ -335,4 +335,43 @@ class FriendRepository {
     }
     await batch.commit();
   }
+
+  /// Removes friend requests, friend edges, and the user's friends subcollection.
+  Future<void> purgeUserSocialGraph(String uid) async {
+    final firestore = _firestore;
+    if (firestore == null) return;
+
+    final requests = _requests;
+    if (requests != null) {
+      final incoming = await requests.where('toUid', isEqualTo: uid).get();
+      for (final doc in incoming.docs) {
+        await doc.reference.delete();
+      }
+      final outgoing = await requests.where('fromUid', isEqualTo: uid).get();
+      for (final doc in outgoing.docs) {
+        await doc.reference.delete();
+      }
+    }
+
+    final friendsCol = _friends(uid);
+    if (friendsCol != null) {
+      final myFriends = await friendsCol.get();
+      if (myFriends.docs.isNotEmpty) {
+        final batch = firestore.batch();
+        for (final doc in myFriends.docs) {
+          final friendUid = doc.id;
+          batch.delete(doc.reference);
+          final inverse = _friends(friendUid)?.doc(uid);
+          if (inverse != null) {
+            batch.delete(inverse);
+            final friendUser = _user(friendUid);
+            if (friendUser != null) {
+              batch.update(friendUser, {'friendsCount': FieldValue.increment(-1)});
+            }
+          }
+        }
+        await batch.commit();
+      }
+    }
+  }
 }
