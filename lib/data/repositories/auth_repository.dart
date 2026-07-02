@@ -35,13 +35,7 @@ class AuthRepository {
     return _auth.signInWithCredential(credential);
   }
   Future<UserCredential> signInWithApple() async {
-
-    if (!Platform.isIOS) {
-      throw UnsupportedError("Apple Sign In is only available on iOS.");
-    }
-
     final rawNonce = _generateNonce();
-
     final nonce = _sha256ofString(rawNonce);
 
     final appleCredential =
@@ -53,14 +47,26 @@ class AuthRepository {
       nonce: nonce,
     );
 
+    print("============== APPLE RESPONSE ==============");
+    print("identityToken: ${appleCredential.identityToken != null}");
+    print("authorizationCode: ${appleCredential.authorizationCode != null}");
+    print("userIdentifier: ${appleCredential.userIdentifier}");
+    print("email: ${appleCredential.email}");
+    print("============================================");
+
     final oauthCredential = OAuthProvider("apple.com").credential(
       idToken: appleCredential.identityToken,
       rawNonce: rawNonce,
     );
 
-    return _auth.signInWithCredential(
+    print("Creating Firebase credential...");
+
+    final result = await FirebaseAuth.instance.signInWithCredential(
       oauthCredential,
     );
+
+    print("Firebase login success");
+    return result;
   }
   String _generateNonce([int length = 32]) {
     const charset =

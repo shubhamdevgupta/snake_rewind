@@ -208,15 +208,21 @@ class AuthController extends ChangeNotifier {
       await _completeOnboarding();
 
       _startProfileWatch();
-    } catch (e, st) {
-      _error = 'Apple sign-in failed';
+    } on FirebaseAuthException catch (e, st) {
+      print("==========================");
+      print(e.code);
+      print(e.message);
+      print(e.credential);
+      print("==========================");
 
       await CrashlyticsService.recordError(
         e,
         st,
         reason: 'apple_auth',
       );
-    } finally {
+    }
+
+    finally {
       _setLoading(false);
     }
   }
