@@ -73,22 +73,115 @@ class AuthController extends ChangeNotifier {
       _profileReady &&
       (_profile == null || !_profile!.hasValidUsername);
 
-  Future<void> initialize() async {
-    _onboardingComplete = await StorageService.loadOnboardingComplete();
-    if (_auth != null) {
-      _firebaseUser = _auth!.currentUser;
-      if (_firebaseUser != null) {
-        _mode = _detectMode(_firebaseUser!);
-        final cached = await _userRepo.loadCachedProfile(_firebaseUser!.uid);
-        if (cached != null) {
-          _profile = cached;
-          _profileReady = true;
-          notifyListeners();
-        }
-        await _loadProfile();
+  static const Duration _startupProfileTimeout = Duration(seconds: 10);
+
+  /// Cold-start session restore with timeouts and offline fallback.
+  /// Never throws — startup must always complete.
+  Future<void> initializeForStartup() async {
+    try {
+      _onboardingComplete = await StorageService.loadOnboardingComplete()
+          .timeout(_startupProfileTimeout, onTimeout: () => false);
+
+      if (_auth == null) {
+        notifyListeners();
+        return;
       }
+
+      _firebaseUser = _auth!.currentUser;
+      if (_firebaseUser == null) {
+        notifyListeners();
+        return;
+      }
+
+      _mode = _detectMode(_firebaseUser!);
+      await _hydrateProfileWithOfflineFallback();
+      notifyListeners();
+    } on Object catch (e, st) {
+      _profileReady = true;
+      if (FirebaseBootstrap.initialized) {
+        await CrashlyticsService.recordError(e, st, reason: 'startup_auth');
+      }
+      notifyListeners();
     }
-    notifyListeners();
+  }
+
+  /// When Firebase is unavailable — load local onboarding state only.
+  Future<void> initializeOfflineOnly() async {
+    try {
+      _onboardingComplete = await StorageService.loadOnboardingComplete()
+          .timeout(_startupProfileTimeout, onTimeout: () => false);
+      _firebaseUser = null;
+      _profile = null;
+      _profileReady = true;
+      _mode = AuthMode.none;
+      notifyListeners();
+    } on Object catch (e, st) {
+      _profileReady = true;
+      if (FirebaseBootstrap.initialized) {
+        await CrashlyticsService.recordError(e, st, reason: 'startup_offline');
+      }
+      notifyListeners();
+    }
+  }
+
+  @Deprecated('Use initializeForStartup during cold start')
+  Future<void> initialize() => initializeForStartup();
+
+  Future<void> _hydrateProfileWithOfflineFallback() async {
+    final id = _firebaseUser!.uid;
+
+    final cached = await _userRepo.loadCachedProfile(id);
+    if (cached != null) {
+      _profile = cached;
+      _profileReady = true;
+      notifyListeners();
+    }
+
+    try {
+      await _loadProfileRemote(id).timeout(_startupProfileTimeout);
+    } on TimeoutException catch (e, st) {
+      if (FirebaseBootstrap.initialized) {
+        await CrashlyticsService.recordError(
+          e,
+          st,
+          reason: 'startup_profile_timeout',
+        );
+      }
+      _applyOfflineProfileFallback();
+    } on Object catch (e, st) {
+      if (ExceptionMapper.shouldReportToCrashlytics(e)) {
+        await CrashlyticsService.recordError(e, st, reason: 'startup_profile');
+      }
+      _applyOfflineProfileFallback();
+    }
+
+    _profileReady = true;
+    _startProfileWatch();
+  }
+
+  Future<void> _loadProfileRemote(String id) async {
+    final fetched = await _userRepo.fetchProfile(id);
+    if (fetched != null) {
+      _profile = fetched;
+    } else {
+      _applyOfflineProfileFallback();
+    }
+    await _persistProfileCache();
+  }
+
+  void _applyOfflineProfileFallback() {
+    if (_profile != null || _firebaseUser == null) return;
+    _profile = _firebaseUser!.isAnonymous
+        ? UserProfile.guest(_firebaseUser!.uid)
+        : UserProfile(
+            uid: _firebaseUser!.uid,
+            username: '',
+            displayName: _firebaseUser!.displayName ?? 'Player',
+            email: _firebaseUser!.email,
+            photoUrl: _firebaseUser!.photoURL,
+            isGuest: false,
+            createdAt: DateTime.now(),
+          );
   }
 
   Future<void> continueAsGuest() async {

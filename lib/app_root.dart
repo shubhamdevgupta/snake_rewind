@@ -4,9 +4,8 @@ import 'data/services/auth_controller.dart';
 import 'features/auth/welcome_screen.dart';
 import 'features/social/username_setup_screen.dart';
 import 'game/screens/home_screen.dart';
-import 'shared/widgets/session_loading_screen.dart';
 
-/// Routes between welcome, profile sync, username setup, and home.
+/// Routes between welcome, username setup, and home after startup completes.
 class AppRoot extends StatefulWidget {
   const AppRoot({super.key});
 
@@ -34,9 +33,6 @@ class _AppRootState extends State<AppRoot> {
   Widget _routeFor(AuthController auth) {
     if (!auth.onboardingComplete) {
       return const WelcomeScreen(key: ValueKey('welcome'));
-    }
-    if (auth.isResolvingSession) {
-      return const SessionLoadingScreen(key: ValueKey('loading'));
     }
     if (auth.needsUsernameSetup) {
       return const UsernameSetupScreen(key: ValueKey('username'));

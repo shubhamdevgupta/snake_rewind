@@ -1,36 +1,14 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'app_root.dart';
-import 'core/firebase/firebase_bootstrap.dart';
-import 'core/network/network_service.dart';
+import 'core/startup/startup_theme.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_manager.dart';
-import 'data/services/auth_controller.dart';
-import 'game/services/audio_service.dart';
-import 'game/services/storage_service.dart';
+import 'features/startup/startup_gate.dart';
 import 'shared/widgets/global_loading_overlay.dart';
 
-Future<void> main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-
-  await StorageService.init();
-  await NetworkService.init();
-  await AudioService.init();
-  await ThemeManager.instance.load();
-  await FirebaseBootstrap.safeInit();
-  await AuthController.instance.initialize();
-
-  final settings = ThemeManager.instance.settings;
-  AudioService.muted = !settings.soundEnabled;
-
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-  ]);
-
   runApp(const SnakeApp());
 }
 
@@ -45,6 +23,7 @@ class _SnakeAppState extends State<SnakeApp> {
   @override
   void initState() {
     super.initState();
+    SystemChrome.setSystemUIOverlayStyle(StartupTheme.systemUi);
     ThemeManager.instance.addListener(_rebuild);
   }
 
@@ -54,12 +33,14 @@ class _SnakeAppState extends State<SnakeApp> {
     super.dispose();
   }
 
-  void _rebuild() => setState(() {});
+  void _rebuild() {
+    if (mounted) setState(() {});
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Snake Rewind',
+      title: 'Snake Rewinds',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.current,
       builder: (context, child) {
@@ -67,7 +48,7 @@ class _SnakeAppState extends State<SnakeApp> {
           child: child ?? const SizedBox.shrink(),
         );
       },
-      home: const AppRoot(),
+      home: const StartupGate(),
     );
   }
 }

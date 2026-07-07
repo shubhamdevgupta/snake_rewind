@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'game_theme_data.dart';
+import 'game_themes.dart';
 import 'theme_manager.dart';
 
 abstract final class AppTheme {
